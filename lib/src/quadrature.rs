@@ -90,7 +90,7 @@ const G7_K15: [(f64, f64, Option<f64>); 15] = [
 pub fn gauss_kronrod(
     f: impl Fn(Float) -> Float,
     (a, b): (&Float, &Float),
-    relative_tolerance: &Float,
+    epsilon: &Float,
     interval_limit: u64,
     precision: u64,
 ) -> Float {
@@ -170,14 +170,12 @@ pub fn gauss_kronrod(
             gauss_integral.assign(&kahan_t);
         }
 
-        println!("gk compensation: {}, g compensation: {}", &gauss_kronrod_compensation, &gauss_compensation);
-
         relative_error.assign(&gauss_kronrod_integral);
         relative_error -= &gauss_integral;
         relative_error /= &gauss_kronrod_integral;
         relative_error.abs_mut();
 
-        if &relative_error <= relative_tolerance {
+        if &relative_error <= epsilon {
             break;
         }
 
@@ -185,4 +183,147 @@ pub fn gauss_kronrod(
     }
 
     gauss_kronrod_integral
+}
+
+// note: from the document this is derived from, here are some sane defaults
+//
+// limit: 6 (supposedly "optimal")
+// epsilon: 1e-9
+pub fn tanh_sinh(
+    f: impl Fn(Float) -> Float,
+    (a, b): (&Float, &Float),
+    epsilon: &Float,
+    limit: u64,
+    precision: u64,
+) -> (Float, Float) {
+    let tolerance = epsilon.clone() * 10;
+
+    let mut region_center = Float::new_64(precision);
+    region_center.assign(a + b);
+    region_center /= 2.0;
+
+    let mut half_region_width = Float::new_64(precision);
+    half_region_width.assign(b - a);
+    half_region_width /= 2.0;
+
+    let mut s = f(region_center);
+    let mut h = Float::with_val_64(precision, 2.0);
+    let mut iteration = 0;
+
+    //TODO: get more descriptive names for these and/or use an arena allocator
+
+    let mut v = Float::new_64(precision);
+
+    let mut p = Float::new_64(precision);
+    let mut q = Float::new_64(precision);
+    let mut fp = Float::new_64(precision);
+    let mut fm = Float::new_64(precision);
+    let mut t = Float::new_64(precision);
+    let mut eh = Float::new_64(precision);
+
+    let mut u = Float::new_64(precision);
+    let mut r = Float::new_64(precision);
+    let mut w = Float::new_64(precision);
+    let mut x = Float::new_64(precision);
+
+    let mut temporary;
+
+    loop {
+        p.assign(0);
+        fp.assign(0);
+        fm.assign(0);
+
+        h /= 2;
+        eh.assign(&h);
+        eh.exp_mut();
+        t.assign(&eh);
+        if iteration > 0 {
+            eh.square_mut();
+        }
+
+        loop {
+            u.assign(&t);
+            u.recip_mut();
+            u -= &t;
+            u.exp_mut();
+
+            r.assign(&u);
+            r += 1;
+            r.recip_mut();
+            r *= &u;
+            r *= 2;
+
+            w.assign(&u);
+            w += 1;
+            w.recip_mut();
+            w *= &r;
+
+            x.assign(&t);
+            x.recip_mut();
+            x += &t;
+
+            w *= &x;
+
+            x.assign(&half_region_width);
+            x *= &r;
+
+            temporary = a.clone();
+            temporary += &x;
+
+            if &temporary > a {
+                let y = f(temporary);
+                if y.is_finite() {
+                    fp = y;
+                }
+            }
+
+            temporary = b.clone();
+            temporary -= &x;
+
+            if &temporary < b {
+                let y = f(temporary);
+                if y.is_finite() {
+                    fm = y;
+                }
+            }
+
+            q.assign(&fp);
+            q += &fm;
+            q *= &w;
+            p += &q;
+            t *= &eh;
+
+            temporary = p.clone();
+            temporary.abs_mut();
+            temporary *= epsilon;
+
+            q.abs_mut();
+            if q <= temporary {
+                break;
+            }
+        }
+
+        v.assign(&s);
+        v -= &p;
+        s += &p;
+        v.abs_mut();
+
+        temporary = s.clone();
+        temporary.abs_mut();
+        temporary *= &tolerance;
+
+        iteration += 1;
+
+        if v <= temporary || iteration > limit {
+            break;
+        }
+    }
+
+    let mut e = s.clone();
+    e.abs_mut();
+    e += epsilon;
+    e.recip_mut();
+    e *= v;
+
+    (half_region_width * s * h, e)
 }

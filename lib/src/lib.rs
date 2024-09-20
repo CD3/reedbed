@@ -30,3 +30,4 @@
 
 pub mod utilities;
 pub mod quadrature;
+pub mod bessel;

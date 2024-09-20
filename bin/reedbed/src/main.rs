@@ -30,30 +30,14 @@
 
 use rug::Float;
 
-use reedbed_lib::quadrature;
+use reedbed_lib::utilities;
 
 #[global_allocator]
 static GLOBAL_ALLOCATOR: mimalloc::MiMalloc = mimalloc::MiMalloc;
 
-fn func(mut x: Float) -> Float {
-    let mut x0 = x.clone();
-    x0 *= 2.0;
-    x0.sin_mut();
-    x0 += 2.0;
-
-    x /= -5;
-    x.exp_mut();
-
-    x0 * x
-}
-
 fn main() {
-    let a = Float::with_val_64(128, 0);
-    let b = Float::with_val_64(128, 10.0);
-    let relative_tolerance = Float::with_val_64(128, 1e-20);
+    let a = Float::with_val_64(128, 10.0);
+    let b = Float::with_val_64(128, 20.0);
 
-    println!(
-        "{}",
-        quadrature::gauss_kronrod(func, (&a, &b), &relative_tolerance, 1_000_000, 128)
-    );
+    println!("{:?}", utilities::marcum_q(1, &a, &b, 128));
 }
