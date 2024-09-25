@@ -327,3 +327,87 @@ pub fn tanh_sinh(
 
     (half_region_width * s * h, e)
 }
+
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn integrate_constant() {
+
+
+        let a = Float::with_val(64,0);
+        let b = Float::with_val(64,5);
+        let eps = Float::with_val(64,0.001);
+        let val = gauss_kronrod(
+        |_x| { return Float::with_val(64,3); },
+        (&a,&b),
+        &eps,
+        64,64);
+        assert!( Float::with_val(64, val - Float::with_val(64,15)).abs() < 0.001 );
+
+    }
+
+    #[test]
+    fn integrate_line() {
+
+
+        let a = Float::with_val(64,0);
+        let b = Float::with_val(64,5);
+        let eps = Float::with_val(64,0.001);
+        let val = gauss_kronrod(
+        |x| { return  Float::with_val(64,3) + x; },
+        (&a,&b),
+        &eps,
+        64,64);
+        assert!( Float::with_val(64, val - Float::with_val(64,15) - Float::with_val(64,25)/2).abs() < 0.001 );
+
+    }
+
+    #[test]
+    fn integrate_parabola() {
+
+
+        let a = Float::with_val(64,0);
+        let b = Float::with_val(64,5);
+        let eps = Float::with_val(64,0.001);
+        let val = gauss_kronrod(
+        |x| { return x.clone() + 0.5*x.square(); },
+        (&a,&b),
+        &eps,
+        64,64);
+        assert!( Float::with_val(64, val - Float::with_val(64,25)/2 - Float::with_val(64,125)/6).abs() < 0.001 );
+
+    }
+
+    #[test]
+    fn integrate_sin_squared() {
+
+        use rug::float::Constant;
+
+        let a = Float::with_val(64,0);
+        let b = 2*Float::with_val(64,Constant::Pi);
+        let eps = Float::with_val(64,0.001);
+        let val = gauss_kronrod(
+        |x| { return x.sin().square(); },
+        (&a,&b),
+        &eps,
+        64,64);
+
+        assert!( Float::with_val(64, val - Float::with_val(64,Constant::Pi)).abs() < 0.001 );
+
+
+        let a = Float::with_val(64,0);
+        let b = -2*Float::with_val(64,Constant::Pi);
+        let eps = Float::with_val(64,0.001);
+        let val = gauss_kronrod(
+        |x| { return x.sin().square(); },
+        (&a,&b),
+        &eps,
+        64,64);
+
+        assert!( Float::with_val(64, val + Float::with_val(64,Constant::Pi)).abs() < 0.001 );
+
+    }
+}
