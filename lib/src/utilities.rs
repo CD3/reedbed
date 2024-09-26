@@ -12,8 +12,14 @@ pub fn marcum_q(v: i32, a: &Float, b: &Float, precision: u64) -> Float {
     //TODO: use the variant of double-exponential quadrature supporting
     //      improper integration for this and see how it compares
 
+    //NOTE: using this function to get values for the marcum-q function with
+    //      very small magnitudes results in very incorrect values when the
+    //      precision is insufficient
+
     //TODO: figure out an appropriate epsilon here
-    let epsilon = Float::with_val_64(precision, 1e-28);
+    //TODO: this should probably be dynamically scaled based on the input
+    //      precision
+    let epsilon = Float::with_val_64(precision, 1e-18);
 
     let (integrated, _) = quadrature::tanh_sinh(
         |x| {

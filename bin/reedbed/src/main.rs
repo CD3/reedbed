@@ -36,8 +36,8 @@ use reedbed_lib::utilities;
 static GLOBAL_ALLOCATOR: mimalloc::MiMalloc = mimalloc::MiMalloc;
 
 fn main() {
-    let a = Float::with_val_64(128, 10.0);
-    let b = Float::with_val_64(128, 20.0);
+    let a = Float::with_val_64(64, 20.0);
+    let b = Float::with_val_64(64, 20.0);
 
-    println!("{:?}", utilities::marcum_q(1, &a, &b, 128));
+    println!("{:?}", utilities::marcum_q(1, &a, &b, 64));
 }
