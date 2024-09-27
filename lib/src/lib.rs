@@ -28,6 +28,6 @@
 #![deny(clippy::option_option)]
 #![deny(clippy::mut_mut)]
 
-pub mod utilities;
-pub mod quadrature;
 pub mod bessel;
+pub mod quadrature;
+pub mod utilities;
