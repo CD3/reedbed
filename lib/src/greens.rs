@@ -4,6 +4,7 @@ use rug::Float;
 
 /// Configuration structure for [`fn@large_beam_absorbing_layer`]
 //TODO: document these parameters better
+#[derive(Clone, PartialEq)]
 pub struct LargeBeamAbsorbingLayerConfig<'a> {
     /// Units: cm^-1
     pub mu_a: &'a Float,
@@ -63,6 +64,10 @@ pub fn large_beam_absorbing_layer(
     term_2 *= -1;
     term_2.exp_mut();
 
+    if *tp == 0 {
+        return term_1 * term_2;
+    }
+
     let mut term_3 = Float::with_val_64(precision, mu_a);
     term_3.square_mut();
     term_3 *= tp;
@@ -80,22 +85,69 @@ pub fn large_beam_absorbing_layer(
     sqrt_mu_a.sqrt_mut();
     sqrt_mu_a *= mu_a;
 
-    let mut reusable_term = reciprocal_sqrt;
-    reusable_term += sqrt_mu_a;
-
     let mut argument_1 = Float::with_val_64(precision, z0);
     argument_1 += d;
     argument_1 -= z;
-    argument_1 *= &reusable_term;
+    argument_1 *= &reciprocal_sqrt;
+    argument_1 += &sqrt_mu_a;
     argument_1.erf_mut();
 
     let mut argument_2 = Float::with_val_64(precision, z0);
     argument_2 -= z;
-    argument_2 *= &reusable_term;
+    argument_2 *= &reciprocal_sqrt;
+    argument_2 += &sqrt_mu_a;
     argument_2.erf_mut();
 
     let mut term_4 = argument_1;
     term_4 -= argument_2;
 
     term_1 * term_2 * term_3 * term_4
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    use rug::float::Special;
+
+    #[ctor::ctor]
+    static ZERO: Float = Float::with_val_64(64, Special::Zero);
+
+    #[ctor::ctor]
+    static ONE: Float = Float::with_val_64(64, 1.0);
+
+    #[ctor::ctor]
+    static EPSILON: Float = Float::with_val_64(64, 1e-10);
+
+    #[test]
+    fn large_beam_sanity() {
+        let config = LargeBeamAbsorbingLayerConfig {
+            mu_a: &ONE,
+            rho: &ONE,
+            c: &ONE,
+            k: &ONE,
+            d: &ONE,
+            z0: &ZERO,
+            e0: &ONE,
+            precision: 256,
+        };
+
+        assert_eq!(
+            large_beam_absorbing_layer(config.clone(), &ZERO, &ZERO),
+            5e-1
+        );
+
+        let mut result = large_beam_absorbing_layer(config.clone(), &ONE, &ZERO);
+        // reference result: 0.5 * e^-1
+        result -= 1.83939720586e-1;
+        result.abs_mut();
+        assert!(result < *EPSILON);
+
+        let mut result = large_beam_absorbing_layer(config.clone(), &ONE, &ONE);
+        // reference result: 0.5 * e^-1 * e^1 * (erf(1) - erf(-1/sqrt(4) + 1))
+        result -= 1.6110045756833416583e-1;
+        result.abs_mut();
+        println!("{}", result);
+        assert!(result < *EPSILON);
+    }
 }
