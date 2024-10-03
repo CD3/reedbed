@@ -195,7 +195,21 @@ pub fn flat_top_beam_absorbing_layer(
             r_factor = 1 - r_factor;
             r_factor
         } else {
-            unimplemented!()
+            //TODO: this is not accurate at all. fix the marcum-q function
+            //      implementation
+
+            let mut a = Float::with_val_64(precision, 2.0);
+            a *= alpha;
+            a *= tp;
+            a.recip_mut();
+
+            let mut b = a.clone();
+            b *= radius;
+            a *= r;
+
+            let mut r_factor = utilities::marcum_q(1, &a, &b, precision);
+            r_factor = 1 - r_factor;
+            r_factor
         }
 }
 
@@ -274,6 +288,7 @@ mod tests {
         //                       * (1 - e^(-1/4))
         result -= 3.5635295060953884529e-2;
         result.abs_mut();
+        println!("{}", result);
         assert!(result < *EPSILON);
     }
 }
