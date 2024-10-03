@@ -9,6 +9,12 @@ use rug::{Assign, Float};
 
 /// Nodes and weights from G7 / K15 as a triplet of node, Kronrod weight,
 /// Gaussian weight (if there is one)
+//TODO: consider swapping f64 for rug::Float using ctor::ctor or something
+//
+//      this will incur greater memory usage, however, and one that does not
+//      benefit every user as they may not care to use those specific
+//      nodes/weights
+#[allow(clippy::excessive_precision)]
 const G7_K15: [(f64, f64, Option<f64>); 15] = [
     (
         9.914553711208126392068546975263285e-01,
@@ -94,6 +100,8 @@ pub fn gauss_kronrod(
     interval_limit: u64,
     precision: u64,
 ) -> Float {
+    //TODO: add error estimation using abs(gauss_integral - gauss_kronrod_integral)
+
     let mut n_intervals = 1;
 
     let mut kahan_t = Float::new_64(precision);
@@ -331,37 +339,42 @@ pub fn tanh_sinh(
 #[cfg(test)]
 mod tests {
     use super::*;
+
     use rug::float::Constant;
+
+    //TODO: we should probably parameterize precision here somewhere
+    //TODO: test tanh_sinh
+
+    #[ctor::ctor]
+    static EPSILON: Float = Float::with_val(64, 1e-10);
 
     #[test]
     fn integrate_constant() {
         let a = Float::with_val(64, 0);
         let b = Float::with_val(64, 5);
-        let eps = Float::with_val(64, 1e-3);
         let val = gauss_kronrod(
             |_| {
                 return Float::with_val(64, 3);
             },
             (&a, &b),
-            &eps,
+            &EPSILON,
             64,
             64,
         );
 
-        assert!(Float::with_val(64, val - Float::with_val(64, 15)).abs() < 1e-3);
+        assert!(Float::with_val(64, val - Float::with_val(64, 15)).abs() < *EPSILON);
     }
 
     #[test]
     fn integrate_line() {
         let a = Float::with_val(64, 0);
         let b = Float::with_val(64, 5);
-        let eps = Float::with_val(64, 1e-3);
         let val = gauss_kronrod(
             |x| {
                 return Float::with_val(64, 3) + x;
             },
             (&a, &b),
-            &eps,
+            &EPSILON,
             64,
             64,
         );
@@ -372,7 +385,7 @@ mod tests {
                 val - Float::with_val(64, 15) - Float::with_val(64, 25) / 2
             )
             .abs()
-                < 1e-3
+                < *EPSILON
         );
     }
 
@@ -380,13 +393,12 @@ mod tests {
     fn integrate_parabola() {
         let a = Float::with_val(64, 0);
         let b = Float::with_val(64, 5);
-        let eps = Float::with_val(64, 1e-3);
         let val = gauss_kronrod(
             |x| {
                 return x.clone() + 0.5 * x.square();
             },
             (&a, &b),
-            &eps,
+            &EPSILON,
             64,
             64,
         );
@@ -397,7 +409,7 @@ mod tests {
                 val - Float::with_val(64, 25) / 2 - Float::with_val(64, 125) / 6
             )
             .abs()
-                < 1e-3
+                < *EPSILON
         );
     }
 
@@ -405,32 +417,30 @@ mod tests {
     fn integrate_sin_squared() {
         let a = Float::with_val(64, 0);
         let b = 2 * Float::with_val(64, Constant::Pi);
-        let eps = Float::with_val(64, 1e-3);
         let val = gauss_kronrod(
             |x| {
                 return x.sin().square();
             },
             (&a, &b),
-            &eps,
+            &EPSILON,
             64,
             64,
         );
 
-        assert!(Float::with_val(64, val - Float::with_val(64, Constant::Pi)).abs() < 1e-3);
+        assert!(Float::with_val(64, val - Float::with_val(64, Constant::Pi)).abs() < *EPSILON);
 
         let a = Float::with_val(64, 0);
         let b = -2 * Float::with_val(64, Constant::Pi);
-        let eps = Float::with_val(64, 1e-3);
         let val = gauss_kronrod(
             |x| {
                 return x.sin().square();
             },
             (&a, &b),
-            &eps,
+            &EPSILON,
             64,
             64,
         );
 
-        assert!(Float::with_val(64, val + Float::with_val(64, Constant::Pi)).abs() < 1e-3);
+        assert!(Float::with_val(64, val + Float::with_val(64, Constant::Pi)).abs() < *EPSILON);
     }
 }

@@ -38,7 +38,7 @@ pub fn marcum_q(v: i32, a: &Float, b: &Float, precision: u64) -> Float {
 
             x.pow(v) * two * three
         },
-        (&Float::with_val_64(precision, Special::Zero), &b),
+        (&Float::with_val_64(precision, Special::Zero), b),
         &epsilon,
         6,
         precision,
