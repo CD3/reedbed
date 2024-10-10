@@ -1,6 +1,6 @@
 // SPDX-LICENSE-IDENTIFIER: GPL-3.0-or-later
 
-use rug::{float::Special, Float};
+use rug::{float::Special, Assign, Float};
 use std::borrow::Cow;
 
 use crate::utilities;
@@ -30,8 +30,96 @@ pub struct Layer<'a> {
     /// Units: cm^-1
     pub mu_a: Cow<'a, Float>,
 
-    /// Units: W*cm^-2
+    /// Irradiance. Units: W*cm^-2
     pub e0: Cow<'a, Float>,
+}
+
+impl<'a> Layer<'a> {
+    fn into_owned(self) -> Layer<'static> {
+        Layer {
+            d: Cow::Owned(self.d.into_owned()),
+            z0: Cow::Owned(self.z0.into_owned()),
+            mu_a: Cow::Owned(self.mu_a.into_owned()),
+            e0: Cow::Owned(self.e0.into_owned()),
+        }
+    }
+}
+
+/// Multiple layers of tissue
+#[derive(Clone, PartialEq)]
+pub struct MultiLayer {
+    /// The layers this [`struct@MultiLayer`] is composed of
+    layers: Vec<Layer<'static>>,
+}
+
+impl MultiLayer {
+    /// Creates a new [`struct@MultiLayer`] from multiple [`struct@Layer`]s
+    ///
+    /// If the input layers are not sorted in order of incidence, they are
+    /// sorted. Irradiance is taken from the topmost layer and propagated
+    /// downward according to Beer's Law
+    ///
+    /// If the input layers overlap in any way, [`None`] is returned
+    pub fn new<'a>(input_layers: impl IntoIterator<Item = Layer<'a>>) -> Option<Self> {
+        let input_layers = input_layers.into_iter();
+        let mut layers = Vec::with_capacity(input_layers.size_hint().0);
+
+        for layer in input_layers {
+            layers.push(layer.into_owned());
+        }
+
+        layers.sort_by(|a, b| a.z0.total_cmp(b.z0.as_ref()));
+
+        if let Some(layer) = layers.get(0) {
+            let mut e0 = layer.e0.clone().into_owned();
+
+            let mut z0 = layer.z0.clone().into_owned();
+            z0 += layer.d.as_ref();
+
+            let mut b = layer.d.clone().into_owned();
+            b *= layer.mu_a.as_ref();
+            b *= -1;
+            b.exp_mut();
+            e0 *= &b;
+
+            for layer in layers.iter_mut().skip(1) {
+                if layer.z0.as_ref() < &z0 {
+                    return None;
+                }
+
+                layer.e0.to_mut().assign(&e0);
+
+                z0.assign(layer.z0.as_ref());
+                z0 += layer.d.as_ref();
+
+                b.assign(layer.d.as_ref());
+                b *= layer.mu_a.as_ref();
+                b *= -1;
+                b.exp_mut();
+                e0 *= &b;
+            }
+        }
+
+        Some(Self { layers })
+    }
+
+    pub fn evaluate_with(
+        &self,
+        precision: u64,
+        beam: &dyn Beam,
+        thermal_properties: &ThermalProperties<'_>,
+        z: &Float,
+        r: &Float,
+        tp: &Float,
+    ) -> Float {
+        let mut sum = Float::with_val_64(precision, Special::Zero);
+
+        for layer in &self.layers {
+            sum += beam.evaluate_at(precision, thermal_properties, &layer, z, r, tp);
+        }
+
+        sum
+    }
 }
 
 //TODO: we could probably swap the use of [`struct@Float`] for a generic
@@ -39,12 +127,7 @@ pub struct Layer<'a> {
 //      (if not all) places
 
 /// An abstraction over the various `*Beam` structures
-pub trait Beam: ToOwned + Sized {
-    /// Convert this [`trait@Beam`] into an owned one
-    ///
-    /// This is effectively a no-op if all data was already owned
-    fn into_owned(self) -> <Self as ToOwned>::Owned;
-
+pub trait Beam {
     /// Run the beam over a given [`struct@Layer`] with the provided
     /// [`struct@ThermalProperties`]
     ///
@@ -65,10 +148,6 @@ pub trait Beam: ToOwned + Sized {
 pub struct LargeBeam;
 
 impl Beam for LargeBeam {
-    fn into_owned(self) -> <Self as ToOwned>::Owned {
-        Self
-    }
-
     //TODO: it (might?) be worthwhile to have a specialized method that
     //      doesn't need to take r. however, this could also be addressed with
     //      the genericization of this method at the trait level. see above
@@ -149,12 +228,6 @@ pub struct FlatTopBeam<'a> {
 }
 
 impl<'a> Beam for FlatTopBeam<'a> {
-    fn into_owned(self) -> <Self as ToOwned>::Owned {
-        Self {
-            radius: Cow::Owned(self.radius.into_owned()),
-        }
-    }
-
     fn evaluate_at<'b>(
         &self,
         precision: u64,
@@ -211,10 +284,6 @@ impl<'a> Beam for FlatTopBeam<'a> {
             }
     }
 }
-
-/*pub struct MultiAbsorbingLayer {
-    layers: (),
-}*/
 
 #[cfg(test)]
 mod tests {
