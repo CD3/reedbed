@@ -13,6 +13,15 @@ license = "GPL-3.0-or-later"
 [dependencies]
 rug = "1"
 mimalloc = "0.1"
+serde_yml = "0.0.12"
+
+[dependencies.serde]
+version = "1"
+features = ["derive"]
+
+[dependencies.clap]
+version = "4"
+features = ["derive"]
 
 [dependencies.reedbed-lib]
 path = "../../lib"
