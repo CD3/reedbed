@@ -99,9 +99,7 @@ pub fn gauss_kronrod(
     epsilon: &Float,
     interval_limit: u64,
     precision: u64,
-) -> Float {
-    //TODO: add error estimation using abs(gauss_integral - gauss_kronrod_integral)
-
+) -> (Float, Float) {
     let mut n_intervals = 1;
 
     let mut kahan_t = Float::new_64(precision);
@@ -190,7 +188,7 @@ pub fn gauss_kronrod(
         n_intervals <<= 1;
     }
 
-    gauss_kronrod_integral
+    (gauss_kronrod_integral, relative_error)
 }
 
 // note: from the document this is derived from, here are some sane defaults

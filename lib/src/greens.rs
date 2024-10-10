@@ -103,6 +103,10 @@ impl MultiLayer {
         Some(Self { layers })
     }
 
+    /// Run the given [`trait@Beam`] over the contained [`struct@Layer`]s with
+    /// the provided [`struct@ThermalProperties`]
+    ///
+    /// Not all implementations of [`trait@Beam`] will use all parameters
     pub fn evaluate_with(
         &self,
         precision: u64,
@@ -115,7 +119,7 @@ impl MultiLayer {
         let mut sum = Float::with_val_64(precision, Special::Zero);
 
         for layer in &self.layers {
-            sum += beam.evaluate_at(precision, thermal_properties, &layer, z, r, tp);
+            sum += beam.evaluate_with(precision, thermal_properties, &layer, z, r, tp);
         }
 
         sum
@@ -131,9 +135,8 @@ pub trait Beam {
     /// Run the beam over a given [`struct@Layer`] with the provided
     /// [`struct@ThermalProperties`]
     ///
-    /// Not all implementations of [`trait@Beam`] will use all
-    /// parameters
-    fn evaluate_at<'a>(
+    /// Not all implementations of [`trait@Beam`] will use all parameters
+    fn evaluate_with<'a>(
         &self,
         precision: u64,
         thermal_properties: &ThermalProperties<'a>,
@@ -152,7 +155,7 @@ impl Beam for LargeBeam {
     //      doesn't need to take r. however, this could also be addressed with
     //      the genericization of this method at the trait level. see above
     //      for more details
-    fn evaluate_at<'a>(
+    fn evaluate_with<'a>(
         &self,
         precision: u64,
         thermal_properties: &ThermalProperties<'a>,
@@ -228,7 +231,7 @@ pub struct FlatTopBeam<'a> {
 }
 
 impl<'a> Beam for FlatTopBeam<'a> {
-    fn evaluate_at<'b>(
+    fn evaluate_with<'b>(
         &self,
         precision: u64,
         thermal_properties: &ThermalProperties<'b>,
@@ -243,7 +246,7 @@ impl<'a> Beam for FlatTopBeam<'a> {
             return Float::with_val_64(precision, Special::Zero);
         }
 
-        let z_factor = LargeBeam.evaluate_at(precision, thermal_properties, layer, z, r, tp);
+        let z_factor = LargeBeam.evaluate_with(precision, thermal_properties, layer, z, r, tp);
 
         if *tp == 0 {
             return z_factor;
@@ -313,17 +316,17 @@ mod tests {
         };
 
         assert_eq!(
-            LargeBeam.evaluate_at(64, &thermal_properties, &layer, &ZERO, &ZERO, &ZERO),
+            LargeBeam.evaluate_with(64, &thermal_properties, &layer, &ZERO, &ZERO, &ZERO),
             5e-1
         );
 
-        let mut result = LargeBeam.evaluate_at(64, &thermal_properties, &layer, &ONE, &ZERO, &ZERO);
+        let mut result = LargeBeam.evaluate_with(64, &thermal_properties, &layer, &ONE, &ZERO, &ZERO);
         // reference result: 0.5 * e^-1
         result -= 1.8393972058572116080e-1;
         result.abs_mut();
         assert!(result < *EPSILON);
 
-        let mut result = LargeBeam.evaluate_at(64, &thermal_properties, &layer, &ONE, &ZERO, &ONE);
+        let mut result = LargeBeam.evaluate_with(64, &thermal_properties, &layer, &ONE, &ZERO, &ONE);
         // reference result: 0.5 * e^-1 * e^1 * (erf(1) - erf(-1/sqrt(4) + 1))
         result -= 1.6110045756833416583e-1;
         result.abs_mut();
@@ -349,22 +352,76 @@ mod tests {
         };
 
         assert_eq!(
-            beam.evaluate_at(64, &thermal_properties, &layer, &ZERO, &ZERO, &ZERO),
+            beam.evaluate_with(64, &thermal_properties, &layer, &ZERO, &ZERO, &ZERO),
             5e-1
         );
 
-        let mut result = beam.evaluate_at(64, &thermal_properties, &layer, &ONE, &ZERO, &ZERO);
+        let mut result = beam.evaluate_with(64, &thermal_properties, &layer, &ONE, &ZERO, &ZERO);
         // reference result: 0.5 * e^-1 * (1 - 0)
         result -= 1.8393972058572116080e-1;
         result.abs_mut();
         assert!(result < *EPSILON);
 
-        let mut result = beam.evaluate_at(64, &thermal_properties, &layer, &ONE, &ZERO, &ONE);
+        let mut result = beam.evaluate_with(64, &thermal_properties, &layer, &ONE, &ZERO, &ONE);
         // reference result: 0.5 * e^-1 * e^1 * (erf(1) - erf(-1/sqrt(4) + 1))
         //                       * (1 - e^(-1/4))
         result -= 3.5635295060953884529e-2;
         result.abs_mut();
         println!("{}", result);
+        assert!(result < *EPSILON);
+    }
+
+    #[test]
+    fn multi_layer_sanity() {
+        let thermal_properties = ThermalProperties {
+            rho: Cow::Borrowed(&ONE),
+            c: Cow::Borrowed(&ONE),
+            k: Cow::Borrowed(&ONE),
+        };
+        let layer = Layer {
+            d: Cow::Borrowed(&ONE),
+            z0: Cow::Borrowed(&ZERO),
+            mu_a: Cow::Borrowed(&ONE),
+            e0: Cow::Borrowed(&ONE),
+        };
+        let layers = MultiLayer::new([layer.clone()]).expect("Unable to construct a MultiLayer");
+
+        let mut result =
+            layers.evaluate_with(64, &LargeBeam, &thermal_properties, &ONE, &ZERO, &ONE);
+        result -= LargeBeam.evaluate_with(64, &thermal_properties, &layer, &ONE, &ZERO, &ONE);
+        assert!(result < *EPSILON);
+
+        let layers = MultiLayer::new([
+            Layer {
+                d: Cow::Borrowed(&ONE),
+                z0: Cow::Borrowed(&ZERO),
+                mu_a: Cow::Borrowed(&ONE),
+                e0: Cow::Borrowed(&ONE),
+            },
+            Layer {
+                d: Cow::Borrowed(&ONE),
+                z0: Cow::Borrowed(&ONE),
+                mu_a: Cow::Borrowed(&ONE),
+                e0: Cow::Borrowed(&ZERO),
+            },
+        ])
+        .expect("Unable to construct a MultiLayer");
+
+        let layer = Layer {
+            d: Cow::Owned(Float::with_val_64(64, 2)),
+            z0: Cow::Borrowed(&ZERO),
+            mu_a: Cow::Borrowed(&ONE),
+            e0: Cow::Borrowed(&ONE),
+        };
+
+        let beam = FlatTopBeam {
+            radius: Cow::Borrowed(&ONE),
+        };
+
+        let small = Float::with_val_64(64, 1e-6);
+
+        let mut result = layers.evaluate_with(64, &beam, &thermal_properties, &ZERO, &ZERO, &small);
+        result -= beam.evaluate_with(64, &thermal_properties, &layer, &ZERO, &ZERO, &small);
         assert!(result < *EPSILON);
     }
 }
