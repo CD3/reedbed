@@ -4,18 +4,77 @@ use rug::{Assign, Float};
 
 //TODO: genericize the parameters here. taking arbitrary-precision floats
 //      everywhere is excessive
+//TODO: support generation of arbitrary gauss-kronrod rules
+//TODO: consider swapping (or supporting as an option) `f64` usage in
+//      gauss-kronrod rules for `rug::Float`
 
-//TODO: allow selection of nodes and weights
+pub trait Quadrature<T> {
+    /// Integrate over the region a..b and return the integral and approximate
+    /// error
+    fn integrate(&self, f: impl Fn(T) -> T, epsilon: &T, bounds: (&T, &T)) -> (T, T);
+}
+
+/// A struct providing an implementation of the [`trait@Quadrature`] trait for
+/// the Tanh-Sinh quadrature method
+pub struct TanhSinh {
+    /// The upper limit on iteration
+    ///
+    /// According to https://www.genivia.com/files/qthsh.pdf, 6 is "optimal"
+    /// and 7 is "just as good". 6 is probably a good starting point
+    pub iteration_limit: u64,
+
+    /// Floating point precision (in bits) for MPFR floats
+    pub precision: u64,
+}
+
+impl Quadrature<Float> for TanhSinh {
+    /// According to page 24 of https://www.genivia.com/files/qthsh.pdf, 1e-9
+    /// is a good default for epsilon
+    fn integrate(
+        &self,
+        f: impl Fn(Float) -> Float,
+        epsilon: &Float,
+        bounds: (&Float, &Float),
+    ) -> (Float, Float) {
+        tanh_sinh(f, epsilon, bounds, self.iteration_limit, self.precision)
+    }
+}
+
+/// A struct providing an implementation of the [`trait@Quadrature`] trait for
+/// the Gauss-Kronrod quadrature method
+pub struct GaussKronrod<'a> {
+    /// The upper limit on intervals
+    pub interval_limit: u64,
+
+    /// Floating point precision (in bits) for MPFR floats
+    pub precision: u64,
+
+    /// The quadrature rule to use
+    pub rule: &'a [(f64, f64, Option<f64>)],
+}
+
+impl<'a> Quadrature<Float> for GaussKronrod<'a> {
+    fn integrate(
+        &self,
+        f: impl Fn(Float) -> Float,
+        epsilon: &Float,
+        bounds: (&Float, &Float),
+    ) -> (Float, Float) {
+        gauss_kronrod(
+            f,
+            self.rule,
+            epsilon,
+            bounds,
+            self.interval_limit,
+            self.precision,
+        )
+    }
+}
 
 /// Nodes and weights from G7 / K15 as a triplet of node, Kronrod weight,
 /// Gaussian weight (if there is one)
-//TODO: consider swapping f64 for rug::Float using ctor::ctor or something
-//
-//      this will incur greater memory usage, however, and one that does not
-//      benefit every user as they may not care to use those specific
-//      nodes/weights
 #[allow(clippy::excessive_precision)]
-const G7_K15: [(f64, f64, Option<f64>); 15] = [
+pub const G7_K15: [(f64, f64, Option<f64>); 15] = [
     (
         9.914553711208126392068546975263285e-01,
         2.293532201052922496373200805896959e-02,
@@ -95,8 +154,9 @@ const G7_K15: [(f64, f64, Option<f64>); 15] = [
 
 pub fn gauss_kronrod(
     f: impl Fn(Float) -> Float,
-    (a, b): (&Float, &Float),
+    rule: &[(f64, f64, Option<f64>)],
     epsilon: &Float,
+    (a, b): (&Float, &Float),
     interval_limit: u64,
     precision: u64,
 ) -> (Float, Float) {
@@ -140,7 +200,7 @@ pub fn gauss_kronrod(
             gauss_kronrod_acc.assign(0);
             gauss_acc.assign(0);
 
-            for (node, gauss_kronrod_weight, gauss_weight) in G7_K15 {
+            for (node, gauss_kronrod_weight, gauss_weight) in rule {
                 let mut function_input = Float::with_val_64(precision, &half_region_width);
                 function_input *= node;
                 function_input += &absolute_region_midpoint;
@@ -191,14 +251,10 @@ pub fn gauss_kronrod(
     (gauss_kronrod_integral, relative_error)
 }
 
-// note: from the document this is derived from, here are some sane defaults
-//
-// limit: 6 (supposedly "optimal")
-// epsilon: 1e-9
 pub fn tanh_sinh(
     f: impl Fn(Float) -> Float,
-    (a, b): (&Float, &Float),
     epsilon: &Float,
+    (a, b): (&Float, &Float),
     limit: u64,
     precision: u64,
 ) -> (Float, Float) {
@@ -350,12 +406,13 @@ mod tests {
     fn integrate_constant() {
         let a = Float::with_val(64, 0);
         let b = Float::with_val(64, 5);
-        let val = gauss_kronrod(
+        let (val, _) = gauss_kronrod(
             |_| {
                 return Float::with_val(64, 3);
             },
-            (&a, &b),
+            &G7_K15,
             &EPSILON,
+            (&a, &b),
             64,
             64,
         );
@@ -367,12 +424,13 @@ mod tests {
     fn integrate_line() {
         let a = Float::with_val(64, 0);
         let b = Float::with_val(64, 5);
-        let val = gauss_kronrod(
+        let (val, _) = gauss_kronrod(
             |x| {
                 return Float::with_val(64, 3) + x;
             },
-            (&a, &b),
+            &G7_K15,
             &EPSILON,
+            (&a, &b),
             64,
             64,
         );
@@ -391,12 +449,13 @@ mod tests {
     fn integrate_parabola() {
         let a = Float::with_val(64, 0);
         let b = Float::with_val(64, 5);
-        let val = gauss_kronrod(
+        let (val, _) = gauss_kronrod(
             |x| {
                 return x.clone() + 0.5 * x.square();
             },
-            (&a, &b),
+            &G7_K15,
             &EPSILON,
+            (&a, &b),
             64,
             64,
         );
@@ -415,12 +474,13 @@ mod tests {
     fn integrate_sin_squared() {
         let a = Float::with_val(64, 0);
         let b = 2 * Float::with_val(64, Constant::Pi);
-        let val = gauss_kronrod(
+        let (val, _) = gauss_kronrod(
             |x| {
                 return x.sin().square();
             },
-            (&a, &b),
+            &G7_K15,
             &EPSILON,
+            (&a, &b),
             64,
             64,
         );
@@ -429,12 +489,13 @@ mod tests {
 
         let a = Float::with_val(64, 0);
         let b = -2 * Float::with_val(64, Constant::Pi);
-        let val = gauss_kronrod(
+        let (val, _) = gauss_kronrod(
             |x| {
                 return x.sin().square();
             },
-            (&a, &b),
+            &G7_K15,
             &EPSILON,
+            (&a, &b),
             64,
             64,
         );

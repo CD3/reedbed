@@ -13,7 +13,7 @@ pub fn i_n(n: &Float, z: &Float, precision: u64) -> Float {
     // also has the benefit of working on fractional orders for "free"
 
     //TODO: same comment as the one in the marcum q implementation
-    let epsilon = Float::with_val_64(precision, 1e-28);
+    let epsilon = Float::with_val_64(precision, 1e-9);
 
     let pi = Float::with_val_64(precision, Constant::Pi);
     let pi_reciprocal = pi.clone().recip();
@@ -30,8 +30,8 @@ pub fn i_n(n: &Float, z: &Float, precision: u64) -> Float {
 
             exponential * theta
         },
-        (&Float::with_val_64(precision, Special::Zero), &pi),
         &epsilon,
+        (&Float::with_val_64(precision, Special::Zero), &pi),
         6,
         precision,
     );

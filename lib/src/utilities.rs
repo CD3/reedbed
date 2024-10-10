@@ -19,7 +19,7 @@ pub fn marcum_q(v: i32, a: &Float, b: &Float, precision: u64) -> Float {
     //TODO: figure out an appropriate epsilon here
     //TODO: this should probably be dynamically scaled based on the input
     //      precision
-    let epsilon = Float::with_val_64(precision, 1e-18);
+    let epsilon = Float::with_val_64(precision, 1e-9);
 
     let (integrated, _) = quadrature::tanh_sinh(
         |x| {
@@ -38,8 +38,8 @@ pub fn marcum_q(v: i32, a: &Float, b: &Float, precision: u64) -> Float {
 
             x.pow(v) * two * three
         },
-        (&Float::with_val_64(precision, Special::Zero), b),
         &epsilon,
+        (&Float::with_val_64(precision, Special::Zero), b),
         6,
         precision,
     );
