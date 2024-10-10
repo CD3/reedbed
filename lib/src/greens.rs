@@ -1,15 +1,25 @@
 // SPDX-LICENSE-IDENTIFIER: GPL-3.0-or-later
 
 use rug::{float::Special, Float};
+use std::borrow::Cow;
 
 use crate::utilities;
 
+//TODO: we could probably swap the use of [`struct@Float`] for a generic
+//      parameter that implements the operation traits in rug::ops in most
+//      (if not all) places
+
 /// An abstraction over the various `*AbsorbingLayer` structures
-pub trait AbsorbingLayer<'a> {
+pub trait AbsorbingLayer<'a>: ToOwned + Sized {
+    /// Convert this absorbing layer into an owned one
+    ///
+    /// This is effectively a no-op if all data was already owned
+    fn into_owned(self) -> <Self as ToOwned>::Owned;
+
     /// Get the location at which this layer starts
     ///
     /// This is usually the `z0` parameter on the individual structures
-    fn starts_at(&self) -> &'a Float;
+    fn starts_at(&'a self) -> &'a Float;
 
     /// Evaluate the absorbing layer using the specified parameters
     ///
@@ -22,25 +32,25 @@ pub trait AbsorbingLayer<'a> {
 #[derive(Clone, PartialEq)]
 pub struct LargeBeamAbsorbingLayer<'a> {
     /// Units: cm^-1
-    pub mu_a: &'a Float,
+    pub mu_a: Cow<'a, Float>,
 
     /// Units: g*cm^3
-    pub rho: &'a Float,
+    pub rho: Cow<'a, Float>,
 
     /// Units: J*g^-1*K^-1
-    pub c: &'a Float,
+    pub c: Cow<'a, Float>,
 
     /// Units: W*cm^-1*K^-1
-    pub k: &'a Float,
+    pub k: Cow<'a, Float>,
 
     /// Units: cm
-    pub d: &'a Float,
+    pub d: Cow<'a, Float>,
 
     /// Units: cm
-    pub z0: &'a Float,
+    pub z0: Cow<'a, Float>,
 
     /// Units: W*cm^-2
-    pub e0: &'a Float,
+    pub e0: Cow<'a, Float>,
 
     /// Precision (in bits) of the arbitrary-precision floating point values
     /// used in intermediate calculations (and in the output)
@@ -48,8 +58,21 @@ pub struct LargeBeamAbsorbingLayer<'a> {
 }
 
 impl<'a> AbsorbingLayer<'a> for LargeBeamAbsorbingLayer<'a> {
-    fn starts_at(&self) -> &'a Float {
-        self.z0
+    fn into_owned(self) -> <Self as ToOwned>::Owned {
+        Self {
+            mu_a: Cow::Owned(self.mu_a.into_owned()),
+            rho: Cow::Owned(self.rho.into_owned()),
+            c: Cow::Owned(self.c.into_owned()),
+            k: Cow::Owned(self.k.into_owned()),
+            d: Cow::Owned(self.d.into_owned()),
+            z0: Cow::Owned(self.z0.into_owned()),
+            e0: Cow::Owned(self.e0.into_owned()),
+            precision: self.precision,
+        }
+    }
+
+    fn starts_at(&'a self) -> &'a Float {
+        &self.z0
     }
 
     fn evaluate_at(&self, z: &Float, _r: &Float, tp: &Float) -> Float {
@@ -62,23 +85,24 @@ impl<'a> AbsorbingLayer<'a> for LargeBeamAbsorbingLayer<'a> {
             z0,
             e0,
             precision,
-        } = *self;
+        } = self;
+        let precision = *precision;
 
         //TODO: make this less naive
 
-        let mut alpha = Float::with_val_64(precision, k);
-        alpha /= rho;
-        alpha /= c;
+        let mut alpha = Float::with_val_64(precision, k.as_ref());
+        alpha /= rho.as_ref();
+        alpha /= c.as_ref();
 
-        let mut term_1 = Float::with_val_64(precision, mu_a);
-        term_1 *= e0;
-        term_1 /= rho;
-        term_1 /= c;
+        let mut term_1 = Float::with_val_64(precision, mu_a.as_ref());
+        term_1 *= e0.as_ref();
+        term_1 /= rho.as_ref();
+        term_1 /= c.as_ref();
         term_1 /= 2.0;
 
         let mut term_2 = Float::with_val_64(precision, z);
-        term_2 -= z0;
-        term_2 *= mu_a;
+        term_2 -= z0.as_ref();
+        term_2 *= mu_a.as_ref();
         term_2 *= -1;
         term_2.exp_mut();
 
@@ -86,7 +110,7 @@ impl<'a> AbsorbingLayer<'a> for LargeBeamAbsorbingLayer<'a> {
             return term_1 * term_2;
         }
 
-        let mut term_3 = Float::with_val_64(precision, mu_a);
+        let mut term_3 = Float::with_val_64(precision, mu_a.as_ref());
         term_3.square_mut();
         term_3 *= tp;
         term_3 *= &alpha;
@@ -101,16 +125,16 @@ impl<'a> AbsorbingLayer<'a> for LargeBeamAbsorbingLayer<'a> {
         let mut sqrt_mu_a = alpha;
         sqrt_mu_a *= tp;
         sqrt_mu_a.sqrt_mut();
-        sqrt_mu_a *= mu_a;
+        sqrt_mu_a *= mu_a.as_ref();
 
-        let mut argument_1 = Float::with_val_64(precision, z0);
-        argument_1 += d;
+        let mut argument_1 = Float::with_val_64(precision, z0.as_ref());
+        argument_1 += d.as_ref();
         argument_1 -= z;
         argument_1 *= &reciprocal_sqrt;
         argument_1 += &sqrt_mu_a;
         argument_1.erf_mut();
 
-        let mut argument_2 = Float::with_val_64(precision, z0);
+        let mut argument_2 = Float::with_val_64(precision, z0.as_ref());
         argument_2 -= z;
         argument_2 *= &reciprocal_sqrt;
         argument_2 += &sqrt_mu_a;
@@ -127,28 +151,28 @@ impl<'a> AbsorbingLayer<'a> for LargeBeamAbsorbingLayer<'a> {
 #[derive(Clone, PartialEq)]
 pub struct FlatTopBeamAbsorbingLayer<'a> {
     /// Units: cm^-1
-    pub mu_a: &'a Float,
+    pub mu_a: Cow<'a, Float>,
 
     /// Units: g*cm^3
-    pub rho: &'a Float,
+    pub rho: Cow<'a, Float>,
 
     /// Units: J*g^-1*K^-1
-    pub c: &'a Float,
+    pub c: Cow<'a, Float>,
 
     /// Units: W*cm^-1*K^-1
-    pub k: &'a Float,
+    pub k: Cow<'a, Float>,
 
     /// Units: cm
-    pub d: &'a Float,
+    pub d: Cow<'a, Float>,
 
     /// Units: cm
-    pub z0: &'a Float,
+    pub z0: Cow<'a, Float>,
 
     /// Units: W*cm^-2
-    pub e0: &'a Float,
+    pub e0: Cow<'a, Float>,
 
     /// Units: cm
-    pub radius: &'a Float,
+    pub radius: Cow<'a, Float>,
 
     /// Precision (in bits) of the arbitrary-precision floating point values
     /// used in intermediate calculations (and in the output)
@@ -156,8 +180,22 @@ pub struct FlatTopBeamAbsorbingLayer<'a> {
 }
 
 impl<'a> AbsorbingLayer<'a> for FlatTopBeamAbsorbingLayer<'a> {
-    fn starts_at(&self) -> &'a Float {
-        self.z0
+    fn into_owned(self) -> <Self as ToOwned>::Owned {
+        Self {
+            mu_a: Cow::Owned(self.mu_a.into_owned()),
+            rho: Cow::Owned(self.rho.into_owned()),
+            c: Cow::Owned(self.c.into_owned()),
+            k: Cow::Owned(self.k.into_owned()),
+            d: Cow::Owned(self.d.into_owned()),
+            z0: Cow::Owned(self.z0.into_owned()),
+            e0: Cow::Owned(self.e0.into_owned()),
+            radius: Cow::Owned(self.radius.into_owned()),
+            precision: self.precision,
+        }
+    }
+
+    fn starts_at(&'a self) -> &'a Float {
+        &self.z0
     }
 
     fn evaluate_at(&self, z: &Float, r: &Float, tp: &Float) -> Float {
@@ -171,20 +209,21 @@ impl<'a> AbsorbingLayer<'a> for FlatTopBeamAbsorbingLayer<'a> {
             e0,
             radius,
             precision,
-        } = *self;
+        } = self;
+        let precision = *precision;
 
-        if *tp == 0 && r > radius {
+        if *tp == 0 && r > radius.as_ref() {
             return Float::with_val_64(precision, Special::Zero);
         }
 
         let z_factor = LargeBeamAbsorbingLayer {
-            mu_a,
-            rho,
-            c,
-            k,
-            d,
-            z0,
-            e0,
+            mu_a: Cow::Borrowed(mu_a.as_ref()),
+            rho: Cow::Borrowed(rho.as_ref()),
+            c: Cow::Borrowed(c.as_ref()),
+            k: Cow::Borrowed(k.as_ref()),
+            d: Cow::Borrowed(d.as_ref()),
+            z0: Cow::Borrowed(z0.as_ref()),
+            e0: Cow::Borrowed(e0.as_ref()),
             precision,
         }
         .evaluate_at(z, &Float::with_val_64(precision, Special::Zero), tp);
@@ -195,13 +234,13 @@ impl<'a> AbsorbingLayer<'a> for FlatTopBeamAbsorbingLayer<'a> {
 
         //TODO: don't duplicate this between large_beam_absorbing_layer and
         //      this function
-        let mut alpha = Float::with_val_64(precision, k);
-        alpha /= rho;
-        alpha /= c;
+        let mut alpha = Float::with_val_64(precision, k.as_ref());
+        alpha /= rho.as_ref();
+        alpha /= c.as_ref();
 
         z_factor
             * if *r == 0 {
-                let mut r_factor = Float::with_val_64(precision, radius);
+                let mut r_factor = Float::with_val_64(precision, radius.as_ref());
                 r_factor.square_mut();
                 r_factor /= -4.0;
                 r_factor /= alpha;
@@ -219,7 +258,7 @@ impl<'a> AbsorbingLayer<'a> for FlatTopBeamAbsorbingLayer<'a> {
                 a.recip_mut();
 
                 let mut b = a.clone();
-                b *= radius;
+                b *= radius.as_ref();
                 a *= r;
 
                 let mut r_factor = utilities::marcum_q(1, &a, &b, precision);
@@ -228,6 +267,10 @@ impl<'a> AbsorbingLayer<'a> for FlatTopBeamAbsorbingLayer<'a> {
             }
     }
 }
+
+/*pub struct MultiAbsorbingLayer<'a> {
+    layers: Vec<Box<dyn AbsorbingLayer<'static>>>,
+}*/
 
 #[cfg(test)]
 mod tests {
@@ -244,29 +287,29 @@ mod tests {
 
     #[test]
     fn large_beam_sanity() {
-        let config = LargeBeamAbsorbingLayer {
-            mu_a: &ONE,
-            rho: &ONE,
-            c: &ONE,
-            k: &ONE,
-            d: &ONE,
-            z0: &ZERO,
-            e0: &ONE,
+        let layer = LargeBeamAbsorbingLayer {
+            mu_a: Cow::Borrowed(&ONE),
+            rho: Cow::Borrowed(&ONE),
+            c: Cow::Borrowed(&ONE),
+            k: Cow::Borrowed(&ONE),
+            d: Cow::Borrowed(&ONE),
+            z0: Cow::Borrowed(&ZERO),
+            e0: Cow::Borrowed(&ONE),
             precision: 64,
         };
 
         assert_eq!(
-            large_beam_absorbing_layer(config.clone(), &ZERO, &ZERO),
+            layer.evaluate_at(&ZERO, &ZERO, &ZERO),
             5e-1
         );
 
-        let mut result = large_beam_absorbing_layer(config.clone(), &ONE, &ZERO);
+        let mut result = layer.evaluate_at(&ONE, &ZERO, &ZERO);
         // reference result: 0.5 * e^-1
         result -= 1.8393972058572116080e-1;
         result.abs_mut();
         assert!(result < *EPSILON);
 
-        let mut result = large_beam_absorbing_layer(config.clone(), &ONE, &ONE);
+        let mut result = layer.evaluate_at(&ONE, &ZERO, &ONE);
         // reference result: 0.5 * e^-1 * e^1 * (erf(1) - erf(-1/sqrt(4) + 1))
         result -= 1.6110045756833416583e-1;
         result.abs_mut();
@@ -276,30 +319,30 @@ mod tests {
 
     #[test]
     fn flat_top_beam_sanity() {
-        let config = FlatTopBeamAbsorbingLayer {
-            mu_a: &ONE,
-            rho: &ONE,
-            c: &ONE,
-            k: &ONE,
-            d: &ONE,
-            z0: &ZERO,
-            e0: &ONE,
-            radius: &ONE,
+        let layer = FlatTopBeamAbsorbingLayer {
+            mu_a: Cow::Borrowed(&ONE),
+            rho: Cow::Borrowed(&ONE),
+            c: Cow::Borrowed(&ONE),
+            k: Cow::Borrowed(&ONE),
+            d: Cow::Borrowed(&ONE),
+            z0: Cow::Borrowed(&ZERO),
+            e0: Cow::Borrowed(&ONE),
+            radius: Cow::Borrowed(&ONE),
             precision: 64,
         };
 
         assert_eq!(
-            flat_top_beam_absorbing_layer(config.clone(), &ZERO, &ZERO, &ZERO),
+            layer.evaluate_at(&ZERO, &ZERO, &ZERO),
             5e-1
         );
 
-        let mut result = flat_top_beam_absorbing_layer(config.clone(), &ONE, &ZERO, &ZERO);
+        let mut result = layer.evaluate_at(&ONE, &ZERO, &ZERO);
         // reference result: 0.5 * e^-1 * (1 - 0)
         result -= 1.8393972058572116080e-1;
         result.abs_mut();
         assert!(result < *EPSILON);
 
-        let mut result = flat_top_beam_absorbing_layer(config.clone(), &ONE, &ZERO, &ONE);
+        let mut result = layer.evaluate_at(&ONE, &ZERO, &ONE);
         // reference result: 0.5 * e^-1 * e^1 * (erf(1) - erf(-1/sqrt(4) + 1))
         //                       * (1 - e^(-1/4))
         result -= 3.5635295060953884529e-2;
