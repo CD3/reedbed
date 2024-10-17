@@ -13,5 +13,9 @@ license = "GPL-3.0-or-later"
 [dependencies]
 rug = "1"
 
+[dependencies.serde]
+version = "1"
+features = ["derive"]
+
 [dev-dependencies]
 ctor = "0.2"

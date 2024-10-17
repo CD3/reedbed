@@ -1,6 +1,7 @@
 // SPDX-LICENSE-IDENTIFIER: GPL-3.0-or-later
 
 use rug::{Assign, Float};
+use std::borrow::Borrow;
 
 //TODO: genericize the parameters here. taking arbitrary-precision floats
 //      everywhere is excessive
@@ -11,15 +12,21 @@ use rug::{Assign, Float};
 pub trait Quadrature<T> {
     /// Integrate over the region a..b and return the integral and approximate
     /// error
-    fn integrate(&self, f: impl Fn(T) -> T, epsilon: &T, bounds: (&T, &T)) -> (T, T);
+    fn integrate(
+        &self,
+        f: impl Fn(T) -> T,
+        epsilon: impl Borrow<T>,
+        bounds: (impl Borrow<T>, impl Borrow<T>),
+    ) -> (T, T);
 }
 
 /// A struct providing an implementation of the [`trait@Quadrature`] trait for
 /// the Tanh-Sinh quadrature method
+#[derive(Copy, Clone, Eq, PartialEq, Debug)]
 pub struct TanhSinh {
     /// The upper limit on iteration
     ///
-    /// According to https://www.genivia.com/files/qthsh.pdf, 6 is "optimal"
+    /// According to <https://www.genivia.com/files/qthsh.pdf>, 6 is "optimal"
     /// and 7 is "just as good". 6 is probably a good starting point
     pub iteration_limit: u64,
 
@@ -28,20 +35,27 @@ pub struct TanhSinh {
 }
 
 impl Quadrature<Float> for TanhSinh {
-    /// According to page 24 of https://www.genivia.com/files/qthsh.pdf, 1e-9
-    /// is a good default for epsilon
+    /// According to page 24 of <https://www.genivia.com/files/qthsh.pdf>,
+    /// 1e-9 is a good default for epsilon
     fn integrate(
         &self,
         f: impl Fn(Float) -> Float,
-        epsilon: &Float,
-        bounds: (&Float, &Float),
+        epsilon: impl Borrow<Float>,
+        (a, b): (impl Borrow<Float>, impl Borrow<Float>),
     ) -> (Float, Float) {
-        tanh_sinh(f, epsilon, bounds, self.iteration_limit, self.precision)
+        tanh_sinh(
+            f,
+            epsilon.borrow(),
+            (a.borrow(), b.borrow()),
+            self.iteration_limit,
+            self.precision,
+        )
     }
 }
 
 /// A struct providing an implementation of the [`trait@Quadrature`] trait for
 /// the Gauss-Kronrod quadrature method
+#[derive(Copy, Clone, PartialEq, Debug)]
 pub struct GaussKronrod<'a> {
     /// The upper limit on intervals
     pub interval_limit: u64,
@@ -57,14 +71,14 @@ impl<'a> Quadrature<Float> for GaussKronrod<'a> {
     fn integrate(
         &self,
         f: impl Fn(Float) -> Float,
-        epsilon: &Float,
-        bounds: (&Float, &Float),
+        epsilon: impl Borrow<Float>,
+        (a, b): (impl Borrow<Float>, impl Borrow<Float>),
     ) -> (Float, Float) {
         gauss_kronrod(
             f,
             self.rule,
-            epsilon,
-            bounds,
+            epsilon.borrow(),
+            (a.borrow(), b.borrow()),
             self.interval_limit,
             self.precision,
         )

@@ -28,6 +28,7 @@
 #![deny(clippy::option_option)]
 #![deny(clippy::mut_mut)]
 
+use clap::{Parser, Subcommand};
 use rug::Float;
 
 use reedbed_lib::utilities;
@@ -35,9 +36,28 @@ use reedbed_lib::utilities;
 #[global_allocator]
 static GLOBAL_ALLOCATOR: mimalloc::MiMalloc = mimalloc::MiMalloc;
 
-fn main() {
+/// Command line interface for a Green's function based model for calculating
+/// temperature rise resulting from laser exposure in retinal tissue
+#[derive(Parser, Debug)]
+#[clap(
+    author = "superwhiskers <whiskerdev@protonmail.com>",
+    version = "0.0.0"
+)]
+struct Cli {
+    #[command(subcommand)]
+    command: Commands,
+}
+
+#[derive(Subcommand, Debug)]
+enum Commands {}
+
+fn main() -> anyhow::Result<()> {
+    let _app = Cli::parse();
+
     let a = Float::with_val_64(64, 20.0);
     let b = Float::with_val_64(64, 20.0);
 
     println!("{:?}", utilities::marcum_q(1, &a, &b, 64));
+
+    Ok(())
 }

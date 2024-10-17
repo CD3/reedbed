@@ -14,6 +14,7 @@ license = "GPL-3.0-or-later"
 rug = "1"
 mimalloc = "0.1"
 serde_yml = "0.0.12"
+anyhow = "1"
 
 [dependencies.serde]
 version = "1"
