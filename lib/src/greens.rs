@@ -1,12 +1,13 @@
 // SPDX-LICENSE-IDENTIFIER: GPL-3.0-or-later
 
 use rug::{float::Special, Assign, Float};
+use serde::{Deserialize, Serialize};
 use std::borrow::Cow;
 
-use crate::{quadrature::Quadrature, utilities};
+use crate::{errors::Greens as Error, quadrature::Quadrature, utilities};
 
 /// A configuration structure for specific thermal properties
-#[derive(Clone, PartialEq, Debug)]
+#[derive(Serialize, Deserialize, Clone, PartialEq, Debug)]
 pub struct ThermalProperties<'a> {
     /// Units: g*cm^3
     pub rho: Cow<'a, Float>,
@@ -19,7 +20,7 @@ pub struct ThermalProperties<'a> {
 }
 
 /// A layer of tissue
-#[derive(Clone, PartialEq, Debug)]
+#[derive(Serialize, Deserialize, Clone, PartialEq, Debug)]
 pub struct Layer<'a> {
     /// Units: cm
     pub d: Cow<'a, Float>,
@@ -46,27 +47,35 @@ impl<'a> Layer<'a> {
 }
 
 /// Multiple layers of tissue
-#[derive(Clone, PartialEq, Debug)]
-pub struct MultiLayer {
-    /// The layers this [`struct@MultiLayer`] is composed of
+#[derive(Serialize, Deserialize, Clone, PartialEq, Debug)]
+pub struct Layers {
+    /// The layers this [`struct@Layers`] is composed of
     layers: Vec<Layer<'static>>,
 }
 
-impl MultiLayer {
-    /// Creates a new [`struct@MultiLayer`] from multiple [`struct@Layer`]s
+impl Layers {
+    /// Creates a new [`struct@Layers`] from multiple [`struct@Layer`]s
     ///
     /// If the input layers are not sorted in order of incidence, they are
     /// sorted. Irradiance is taken from the topmost layer and propagated
     /// downward according to Beer's Law
     ///
-    /// If the input layers overlap in any way, [`None`] is returned
-    pub fn new<'a>(input_layers: impl IntoIterator<Item = Layer<'a>>) -> Option<Self> {
-        let input_layers = input_layers.into_iter();
-        let mut layers = Vec::with_capacity(input_layers.size_hint().0);
+    /// If the input layers overlap in any way, an error is returned
+    pub fn new<'a>(input_layers: impl IntoIterator<Item = Layer<'a>>) -> Result<Self, Error> {
+        Self::new_static(input_layers.into_iter().map(|layer| layer.into_owned()))
+    }
 
-        for layer in input_layers {
-            layers.push(layer.into_owned());
-        }
+    /// Creates a new [`struct@Layers`] from multiple static [`struct@Layer`]s
+    ///
+    /// If the input layers are not sorted in order of incidence, they are
+    /// sorted. Irradiance is taken from the topmost layer and propagated
+    /// downward according to Beer's Law
+    ///
+    /// If the input layers overlap in any way, an error is returned
+    pub fn new_static(
+        input_layers: impl IntoIterator<Item = Layer<'static>>,
+    ) -> Result<Self, Error> {
+        let mut layers = input_layers.into_iter().collect::<Vec<_>>();
 
         layers.sort_by(|a, b| a.z0.total_cmp(b.z0.as_ref()));
 
@@ -84,7 +93,7 @@ impl MultiLayer {
 
             for layer in layers.iter_mut().skip(1) {
                 if layer.z0.as_ref() < &z0 {
-                    return None;
+                    return Err(Error::LayerOverlap);
                 }
 
                 layer.e0.to_mut().assign(&e0);
@@ -100,10 +109,34 @@ impl MultiLayer {
             }
         }
 
-        Some(Self { layers })
+        Ok(Self { layers })
     }
 
-    //TODO: add a method for updating e0
+    /// Updates the irradiance value, in W*cm^-2
+    ///
+    /// The input irradiance is set as-is on the topmost layer and is
+    /// propagated downward according to Beer's Law
+    pub fn set_e0(&mut self, mut e0: Float) {
+        if let Some(layer) = self.layers.first_mut() {
+            layer.e0 = Cow::Owned(e0.clone());
+
+            let mut b = layer.d.clone().into_owned();
+            b *= layer.mu_a.as_ref();
+            b *= -1;
+            b.exp_mut();
+            e0 *= &b;
+
+            for layer in self.layers.iter_mut().skip(1) {
+                layer.e0.to_mut().assign(&e0);
+
+                b.assign(layer.d.as_ref());
+                b *= layer.mu_a.as_ref();
+                b *= -1;
+                b.exp_mut();
+                e0 *= &b;
+            }
+        }
+    }
 
     /// Runs the given [`trait@Beam`] over the contained [`struct@Layer`]s
     /// with the provided [`struct@ThermalProperties`]
@@ -131,6 +164,7 @@ impl MultiLayer {
     ///
     /// Similar to [`fn@temperature_rise`], this is really just a convenience
     /// wrapper over `Quadrature::integrate`
+    #[allow(clippy::too_many_arguments)]
     pub fn temperature_rise(
         &self,
         precision: u64,
@@ -171,7 +205,8 @@ pub trait Beam {
     ) -> Float;
 }
 
-#[derive(Clone, PartialEq, Debug)]
+//TODO: add documentation describing what this is
+#[derive(Serialize, Deserialize, Clone, PartialEq, Debug)]
 pub struct LargeBeam;
 
 impl Beam for LargeBeam {
@@ -247,14 +282,14 @@ impl Beam for LargeBeam {
     }
 }
 
-//TODO: same todo as above
-#[derive(Clone, PartialEq, Debug)]
+#[derive(Serialize, Deserialize, Clone, PartialEq, Debug)]
 pub struct FlatTopBeam<'a> {
     /// Units: cm
     pub radius: Cow<'a, Float>,
 }
 
 impl<'a> Beam for FlatTopBeam<'a> {
+    //TODO: same todo as above
     fn evaluate_with<'b>(
         &self,
         precision: u64,
@@ -316,6 +351,7 @@ impl<'a> Beam for FlatTopBeam<'a> {
 ///
 /// This is really just a convenience wrapper around `Quadrature::integrate`
 #[inline]
+#[allow(clippy::too_many_arguments)]
 pub fn temperature_rise(
     precision: u64,
     quadrature: &impl Quadrature<Float>,
@@ -420,7 +456,7 @@ mod tests {
     }
 
     #[test]
-    fn multi_layer_sanity() {
+    fn layers_sanity() {
         let thermal_properties = ThermalProperties {
             rho: Cow::Borrowed(&ONE),
             c: Cow::Borrowed(&ONE),
@@ -432,14 +468,14 @@ mod tests {
             mu_a: Cow::Borrowed(&ONE),
             e0: Cow::Borrowed(&ONE),
         };
-        let layers = MultiLayer::new([layer.clone()]).expect("Unable to construct a MultiLayer");
+        let layers = Layers::new([layer.clone()]).expect("Unable to construct a Layers");
 
         let mut result =
             layers.evaluate_with(64, &LargeBeam, &thermal_properties, &ONE, &ZERO, &ONE);
         result -= LargeBeam.evaluate_with(64, &thermal_properties, &layer, &ONE, &ZERO, &ONE);
         assert!(result < *EPSILON);
 
-        let layers = MultiLayer::new([
+        let layers = Layers::new([
             Layer {
                 d: Cow::Borrowed(&ONE),
                 z0: Cow::Borrowed(&ZERO),
@@ -453,7 +489,7 @@ mod tests {
                 e0: Cow::Borrowed(&ZERO),
             },
         ])
-        .expect("Unable to construct a MultiLayer");
+        .expect("Unable to construct a Layers");
 
         let layer = Layer {
             d: Cow::Owned(Float::with_val_64(64, 2)),

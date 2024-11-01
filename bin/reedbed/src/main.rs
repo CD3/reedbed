@@ -28,10 +28,21 @@
 #![deny(clippy::option_option)]
 #![deny(clippy::mut_mut)]
 
-use clap::{Parser, Subcommand};
+use anyhow::Context;
+use clap::{Parser, Subcommand, ValueEnum};
 use rug::Float;
+use std::{
+    fs::File,
+    io::{self, BufReader, Read, Write},
+    str::FromStr,
+};
+use strum_macros::{Display, EnumString};
 
-use reedbed_lib::utilities;
+mod model;
+mod utilities;
+
+use crate::model::{Beam, Interval, Time};
+use reedbed_lib::quadrature::TanhSinh;
 
 #[global_allocator]
 static GLOBAL_ALLOCATOR: mimalloc::MiMalloc = mimalloc::MiMalloc;
@@ -46,18 +57,160 @@ static GLOBAL_ALLOCATOR: mimalloc::MiMalloc = mimalloc::MiMalloc;
 struct Cli {
     #[command(subcommand)]
     command: Commands,
+
+    /// The size of the thread pool to run jobs in
+    ///
+    /// If no value is provided, either the value in `RAYON_NUM_THREADS` or
+    /// the number of logical cores will be used
+    #[arg(short = 'j', long = "jobs", value_name = "JOBS")]
+    threads: Option<usize>,
 }
 
 #[derive(Subcommand, Debug)]
-enum Commands {}
+enum Commands {
+    /// Computes the temperature rise resulting from laser exposure in retinal
+    /// tissue at given points in time
+    TemperatureRise {
+        /// The input file describing the computation. If none is provided,
+        /// then stdin is used
+        #[arg(value_name = "IN")]
+        input: Option<String>,
+
+        /// The format to read computation descriptions in
+        ///
+        /// If none is provided, it will be automatically detected from the
+        /// file extension (if there is one). If a format is not able to be
+        /// determined, no computations will be performed
+        #[arg(value_enum, short = 'f', long = "from", value_name = "FROM")]
+        from: Option<InputFormat>,
+
+        /// The output file to write computation results to. If none is
+        /// provided, stdout is used
+        #[arg(short = 'o', long = "output", value_name = "OUT")]
+        output: Option<String>,
+
+        /// The format to write computation results in
+        ///
+        /// If none is provided, it will be automatically detected from the
+        /// file extension (if there is one). If a format is not able to be
+        /// determined, no computations will be performed
+        #[arg(value_enum, short = 't', long = "to", value_name = "TO")]
+        to: Option<OutputFormat>,
+    },
+}
+
+#[derive(ValueEnum, Debug, Clone, Display, EnumString)]
+#[strum(serialize_all = "kebab-case")]
+pub enum InputFormat {
+    /// JSON
+    Json,
+}
+
+#[derive(ValueEnum, Debug, Clone, Display, EnumString)]
+#[strum(serialize_all = "kebab-case")]
+pub enum OutputFormat {
+    /// JSON
+    Json,
+}
+
+#[derive(thiserror::Error, Debug)]
+enum ReedbedError {
+    #[error("The input format is ambiguous")]
+    AmbiguousInput,
+
+    #[error("The output format is ambiguous")]
+    AmbiguousOutput,
+}
 
 fn main() -> anyhow::Result<()> {
-    let _app = Cli::parse();
+    let app = Cli::parse();
 
-    let a = Float::with_val_64(64, 20.0);
-    let b = Float::with_val_64(64, 20.0);
+    match app.command {
+        Commands::TemperatureRise {
+            ref input,
+            from,
+            ref output,
+            to,
+        } => {
+            let input_stream = BufReader::new(if let Some(name) = input {
+                Box::new(
+                    File::open(name)
+                        .context("Unable to open the file containing the computation")?,
+                ) as Box<dyn Read>
+            } else {
+                Box::new(io::stdin()) as Box<dyn Read>
+            });
 
-    println!("{:?}", utilities::marcum_q(1, &a, &b, 64));
+            let input = match from
+                .or_else(|| {
+                    input
+                        .as_ref()
+                        .and_then(|n| n.rsplit_once('.'))
+                        .and_then(|s| <InputFormat as FromStr>::from_str(s.1).ok())
+                })
+                .ok_or(ReedbedError::AmbiguousInput)?
+            {
+                InputFormat::Json => serde_json::Deserializer::from_reader(input_stream)
+                    .into_iter::<model::Configuration>(),
+            };
+
+            let output_stream = if let Some(name) = output {
+                Box::new(File::open(name).context(
+                    "Unable to open the file intended to hold the results of the computation",
+                )?) as Box<dyn Write>
+            } else {
+                Box::new(io::stdout()) as Box<dyn Write>
+            };
+
+            let output = match to
+                .or_else(|| {
+                    output
+                        .as_ref()
+                        .and_then(|n| n.rsplit_once('.'))
+                        .and_then(|s| <OutputFormat as FromStr>::from_str(s.1).ok())
+                })
+                .ok_or(ReedbedError::AmbiguousOutput)?
+            {
+                OutputFormat::Json => serde_json::Serializer::new(output_stream),
+            };
+
+            for configuration in input {
+                let configuration =
+                    configuration.context("Unable to deserialize an input configuration")?;
+                let thermal_properties = configuration.thermal.into_lib();
+                let layers = configuration
+                    .layers
+                    .into_lib()
+                    .context("Unable to convert the layer configuration into a Layers")?;
+                let quadrature = TanhSinh {
+                    iteration_limit: 6,
+                    precision: 64,
+                };
+                let epsilon = Float::with_val_64(64, 1e-3);
+
+                match configuration.laser {
+                    Beam::LargeBeam(beam) => {}
+                    Beam::FlatTopBeam(beam) => {
+                        let beam = beam.into_lib();
+                        for (a, b) in configuration.simulation.time {
+                            let (rise, err) = layers.temperature_rise(
+                                64,
+                                &quadrature,
+                                &beam,
+                                &thermal_properties,
+                                &configuration.simulation.sensor.z,
+                                &configuration.simulation.sensor.r,
+                                &epsilon,
+                                (&a, &b),
+                            );
+
+                            println!("({a}, {b}) => {rise} ~ {err}");
+                        }
+                    }
+                }
+            }
+        }
+    }
 
     Ok(())
 }

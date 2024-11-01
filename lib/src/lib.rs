@@ -29,6 +29,7 @@
 #![deny(clippy::mut_mut)]
 
 pub mod bessel;
+pub mod errors;
 pub mod greens;
 pub mod quadrature;
 pub mod utilities;
