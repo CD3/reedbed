@@ -1,0 +1,37 @@
+{
+  "thermal": {
+    "k": "{{reedbed/thermal/k}}",
+    "rho": "{{reedbed/thermal/rho}}",
+    "c": "{{reedbed/thermal/c}}"
+  },
+  "layers": [
+    {
+      "mu_a": "{{reedbed/layers/0/mu_a}}",
+      "d": "{{reedbed/layers/0/d}}",
+      "z0": "{{reedbed/layers/0/z0}}",
+      "e0": "{{reedbed/layers/0/e0}}"
+    },
+    {
+      "mu_a": "{{reedbed/layers/1/mu_a}}",
+      "d": "{{reedbed/layers/1/d}}",
+      "z0": "{{reedbed/layers/1/z0}}",
+      "e0": "{{reedbed/layers/1/e0}}"
+    }
+  ],
+  "laser": {
+    "kind": "FlatTopBeam",
+    "radius": "{{reedbed/laser/radius}}"
+  },
+  "simulation": {
+    "sensor": {
+      "z": "{{reedbed/simulation/sensor/z}}",
+      "r": "{{reedbed/simulation/sensor/r}}"
+    },
+    "time": {
+      "kind": "Uniform",
+      "t0": "0",
+      "dt": "{{reedbed/simulation/time/dt}}",
+      "tmax": "{{reedbed/simulation/time/tmax}}"
+    }
+  }
+}

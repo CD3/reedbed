@@ -1,0 +1,24 @@
+thermal:
+    k: {{retina-therm/thermal/k}}
+    rho: {{retina-therm/thermal/rho}}
+    c: {{retina-therm/thermal/c}}
+layers:
+  - mua: {{retina-therm/layers/0/mua}}
+    d: {{retina-therm/layers/0/d}}
+    z0: {{retina-therm/layers/0/z0}}
+  - mua: {{retina-therm/layers/1/mua}}
+    d: {{retina-therm/layers/1/d}}
+    z0: {{retina-therm/layers/1/z0}}
+laser:
+  E0: {{retina-therm/laser/E0}}
+  R: {{retina-therm/laser/R}}
+
+simulation:
+  sensor:
+    z: {{retina-therm/simulation/sensor/z}}
+    r: {{retina-therm/simulation/sensor/r}}
+  time:
+    max: {{retina-therm/simulation/time/max}}
+    dt: {{retina-therm/simulation/time/dt}}
+  output_file : output/retina-therm/Tvst.txt
+  config_output_file : output/retina-therm/CONFIG.yml
