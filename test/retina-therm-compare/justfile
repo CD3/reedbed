@@ -1,0 +1,19 @@
+run:
+  mkdir -p output/reedbed
+  powerconf render CONFIG.yml CONFIG-reedbed.yml /dev/stdout | time cargo run --release -- temperature-rise -f json  -t json > output/reedbed/output.txt 2> reedbed.stderr
+  powerconf render CONFIG.yml CONFIG-retina-therm.yml /dev/stdout | time retina-therm temperature-rise /dev/stdin 2> retina-therm.stderr
+  # format reedbed output to something gnuplot can handle
+  cd output/reedbed && gawk '{print $2,$4,$6}' output.txt  | sed "s|)||" > Tvst.txt
+
+check:
+  @which powerconf || echo "powerconf cli not found. Please install (e.g. `pipx install powerconf`) and/or make sure the directory with the executable is in your PATH"
+  @which retina-therm || echo "retina-therm cli not found. Please install (e.g. `pipx install retina-therm`) and/or make sure the directory with the executable is in your PATH"
+  @which gawk || echo "gawk not found. Please install."
+  @which sed || echo "sed not found. Please install."
+
+clean:
+  rm output -rf
+  rm *.stderr
+
+plot:
+  cd output && gnuplot --persist -e 'plot "reedbed/Tvst.txt", "retina-therm/Tvst.txt"'
