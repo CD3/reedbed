@@ -178,27 +178,26 @@ impl Beam for LargeBeam {
     ) -> f64 {
         //TODO: make this less naive
 
-        let mut alpha = thermal_properties.k
+        let alpha = thermal_properties.k
             / thermal_properties.rho
             / thermal_properties.c;
-        let mut term_1 = (layer.mu_a * layer.e0)
+        let term_1 = (layer.mu_a * layer.e0)
             / thermal_properties.rho
             / thermal_properties.c
             / 2.0;
-        let mut term_2 = ((z - layer.z0) * layer.mu_a * -1.00).exp();
+        let term_2 = ((z - layer.z0) * layer.mu_a * -1.00).exp();
 
         if tp < 1e-9 {
             return term_1 * term_2;
         }
 
-        let mut term_3 = (layer.mu_a.powi(2) * tp * alpha).exp();
-        let mut reciprocal_sqrt = (alpha * tp * 4.00).sqrt().recip();
-        let mut sqrt_mu_a = (alpha * tp).sqrt() * layer.mu_a;
-        let mut argument_1 =
+        let term_3 = (layer.mu_a.powi(2) * tp * alpha).exp();
+        let reciprocal_sqrt = (alpha * tp * 4.00).sqrt().recip();
+        let sqrt_mu_a = (alpha * tp).sqrt() * layer.mu_a;
+        let argument_1 =
             erf(((layer.z0 + layer.d - z) * reciprocal_sqrt) + sqrt_mu_a);
-        let mut argument_2 =
-            erf(((layer.z0 - z) * reciprocal_sqrt) + sqrt_mu_a);
-        let mut term_4 = argument_1 - argument_2;
+        let argument_2 = erf(((layer.z0 - z) * reciprocal_sqrt) + sqrt_mu_a);
+        let term_4 = argument_1 - argument_2;
 
         term_1 * term_2 * term_3 * term_4
     }
@@ -231,7 +230,7 @@ impl Beam for FlatTopBeam {
             return z_factor;
         }
 
-        let mut alpha = thermal_properties.k
+        let alpha = thermal_properties.k
             / thermal_properties.rho
             / thermal_properties.c;
 
@@ -273,206 +272,161 @@ pub fn temperature_rise(
 mod tests {
     use super::*;
 
-    #[ctor::ctor]
-    static ZERO: Float = Float::with_val_64(64, Special::Zero);
-
-    #[ctor::ctor]
-    static ONE: Float = Float::with_val_64(64, 1.0);
-
-    #[ctor::ctor]
-    static EPSILON: Float = Float::with_val_64(64, 1e-16);
+    const EPSILON: f64 = 1e-10;
 
     #[test]
     fn large_beam_sanity() {
         let thermal_properties = ThermalProperties {
-            rho: Cow::Borrowed(&ONE),
-            c: Cow::Borrowed(&ONE),
-            k: Cow::Borrowed(&ONE),
+            rho: 1.00,
+            c: 1.00,
+            k: 1.00,
         };
         let layer = Layer {
-            d: Cow::Borrowed(&ONE),
-            z0: Cow::Borrowed(&ZERO),
-            mu_a: Cow::Borrowed(&ONE),
-            e0: Cow::Borrowed(&ONE),
+            d: 1.00,
+            z0: 0.00,
+            mu_a: 1.00,
+            e0: 1.00,
         };
 
-        assert_eq!(
-            LargeBeam.evaluate_with(
-                64,
+        assert!(
+            (LargeBeam.evaluate_with(
                 &thermal_properties,
                 &layer,
-                &ZERO,
-                &ZERO,
-                &ZERO
-            ),
-            5e-1
+                0.00,
+                0.00,
+                0.00,
+            ) - 5e-1)
+                .abs()
+                < EPSILON
         );
 
-        let mut result = LargeBeam.evaluate_with(
-            64,
+        let result = LargeBeam.evaluate_with(
             &thermal_properties,
             &layer,
-            &ONE,
-            &ZERO,
-            &ZERO,
+            1.00,
+            0.00,
+            0.00,
         );
+
         // reference result: 0.5 * e^-1
-        result -= 1.8393972058572116080e-1;
-        result.abs_mut();
-        assert!(result < *EPSILON);
+        assert!((result - 1.8393972058572116080e-1).abs() < EPSILON);
 
-        let mut result = LargeBeam.evaluate_with(
-            64,
+        let result = LargeBeam.evaluate_with(
             &thermal_properties,
             &layer,
-            &ONE,
-            &ZERO,
-            &ONE,
+            1.00,
+            0.00,
+            1.00,
         );
         // reference result: 0.5 * e^-1 * e^1 * (erf(1) - erf(-1/sqrt(4) + 1))
-        result -= 1.6110045756833416583e-1;
-        result.abs_mut();
-        println!("{}", result);
-        assert!(result < *EPSILON);
+        assert!((result - 1.6110045756833416583e-1).abs() < EPSILON);
     }
 
     #[test]
     fn flat_top_beam_sanity() {
         let thermal_properties = ThermalProperties {
-            rho: Cow::Borrowed(&ONE),
-            c: Cow::Borrowed(&ONE),
-            k: Cow::Borrowed(&ONE),
+            rho: 1.00,
+            c: 1.00,
+            k: 1.00,
         };
         let layer = Layer {
-            d: Cow::Borrowed(&ONE),
-            z0: Cow::Borrowed(&ZERO),
-            mu_a: Cow::Borrowed(&ONE),
-            e0: Cow::Borrowed(&ONE),
+            d: 1.00,
+            z0: 0.00,
+            mu_a: 1.00,
+            e0: 1.00,
         };
-        let beam = FlatTopBeam {
-            radius: Cow::Borrowed(&ONE),
-        };
+        let beam = FlatTopBeam { radius: 1.00 };
 
-        assert_eq!(
-            beam.evaluate_with(
-                64,
+        assert!(
+            (beam.evaluate_with(
                 &thermal_properties,
                 &layer,
-                &ZERO,
-                &ZERO,
-                &ZERO
-            ),
-            5e-1
+                0.00,
+                0.00,
+                0.00,
+            ) - 5e-1)
+                .abs()
+                < EPSILON
         );
 
-        let mut result = beam.evaluate_with(
-            64,
-            &thermal_properties,
-            &layer,
-            &ONE,
-            &ZERO,
-            &ZERO,
-        );
+        let result =
+            beam.evaluate_with(&thermal_properties, &layer, 1.00, 0.00, 0.00);
         // reference result: 0.5 * e^-1 * (1 - 0)
-        result -= 1.8393972058572116080e-1;
-        result.abs_mut();
-        assert!(result < *EPSILON);
+        assert!((result - 1.8393972058572116080e-1).abs() < EPSILON);
 
-        let mut result = beam.evaluate_with(
-            64,
-            &thermal_properties,
-            &layer,
-            &ONE,
-            &ZERO,
-            &ONE,
-        );
+        let result =
+            beam.evaluate_with(&thermal_properties, &layer, 1.00, 0.00, 1.00);
         // reference result: 0.5 * e^-1 * e^1 * (erf(1) - erf(-1/sqrt(4) + 1))
         //                       * (1 - e^(-1/4))
-        result -= 3.5635295060953884529e-2;
-        result.abs_mut();
-        println!("{}", result);
-        assert!(result < *EPSILON);
+        assert!((result - 3.5635295060953884529e-2).abs() < EPSILON);
     }
 
     #[test]
     fn layers_sanity() {
         let thermal_properties = ThermalProperties {
-            rho: Cow::Borrowed(&ONE),
-            c: Cow::Borrowed(&ONE),
-            k: Cow::Borrowed(&ONE),
+            rho: 1.00,
+            c: 1.00,
+            k: 1.00,
         };
         let layer = Layer {
-            d: Cow::Borrowed(&ONE),
-            z0: Cow::Borrowed(&ZERO),
-            mu_a: Cow::Borrowed(&ONE),
-            e0: Cow::Borrowed(&ONE),
+            d: 1.00,
+            z0: 0.00,
+            mu_a: 1.00,
+            e0: 1.00,
         };
         let layers = Layers::new([layer.clone()])
             .expect("unable to construct a Layers structure");
 
         let mut result = layers.evaluate_with(
-            64,
             &LargeBeam,
             &thermal_properties,
-            &ONE,
-            &ZERO,
-            &ONE,
+            1.00,
+            0.00,
+            1.00,
         );
         result -= LargeBeam.evaluate_with(
-            64,
             &thermal_properties,
             &layer,
-            &ONE,
-            &ZERO,
-            &ONE,
+            1.00,
+            0.00,
+            1.00,
         );
-        assert!(result < *EPSILON);
+        assert!(result < EPSILON);
 
         let layers = Layers::new([
             Layer {
-                d: Cow::Borrowed(&ONE),
-                z0: Cow::Borrowed(&ZERO),
-                mu_a: Cow::Borrowed(&ONE),
-                e0: Cow::Borrowed(&ONE),
+                d: 1.00,
+                z0: 0.00,
+                mu_a: 1.00,
+                e0: 1.00,
             },
             Layer {
-                d: Cow::Borrowed(&ONE),
-                z0: Cow::Borrowed(&ONE),
-                mu_a: Cow::Borrowed(&ONE),
-                e0: Cow::Borrowed(&ZERO),
+                d: 1.00,
+                z0: 1.00,
+                mu_a: 1.00,
+                e0: 0.00,
             },
         ])
         .expect("unable to construct a Layers structure");
 
         let layer = Layer {
-            d: Cow::Owned(Float::with_val_64(64, 2)),
-            z0: Cow::Borrowed(&ZERO),
-            mu_a: Cow::Borrowed(&ONE),
-            e0: Cow::Borrowed(&ONE),
+            d: 2.00,
+            z0: 0.00,
+            mu_a: 1.00,
+            e0: 1.00,
         };
 
-        let beam = FlatTopBeam {
-            radius: Cow::Borrowed(&ONE),
-        };
-
-        let small = Float::with_val_64(64, 1e-6);
+        let beam = FlatTopBeam { radius: 1.00 };
 
         let mut result = layers.evaluate_with(
-            64,
             &beam,
             &thermal_properties,
-            &ZERO,
-            &ZERO,
-            &small,
+            0.00,
+            0.00,
+            1e-6,
         );
-        result -= beam.evaluate_with(
-            64,
-            &thermal_properties,
-            &layer,
-            &ZERO,
-            &ZERO,
-            &small,
-        );
-        assert!(result < *EPSILON);
+        result -=
+            beam.evaluate_with(&thermal_properties, &layer, 0.00, 0.00, 1e-6);
+        assert!(result < EPSILON);
     }
 }

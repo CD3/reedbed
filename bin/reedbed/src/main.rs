@@ -39,7 +39,7 @@ use strum_macros::{Display, EnumString};
 
 mod model;
 
-use crate::model::{Beam, Interval, Time};
+use crate::model::Beam;
 use reedbed_lib::quadrature::TanhSinh;
 
 #[global_allocator]

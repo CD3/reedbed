@@ -2,9 +2,8 @@
 
 use serde::{Deserialize, Serialize};
 
-use reedbed_lib::{
-    errors,
-    greens::{FlatTopBeam, LargeBeam, Layers, ThermalProperties},
+use reedbed_lib::greens::{
+    FlatTopBeam, LargeBeam, Layers, ThermalProperties,
 };
 
 /// Configuration of the entire simulation
@@ -115,17 +114,12 @@ impl Iterator for TimeIterator {
 
     fn next(&mut self) -> Option<Self::Item> {
         match self {
-            Self::Uniform {
-                t0,
-                tmax,
-                dt,
-                mut t,
-            } => {
-                if t > *tmax {
+            Self::Uniform { t0, tmax, dt, t } => {
+                if t > tmax {
                     return None;
                 }
-                let told = t;
-                t += *dt;
+                let told = *t;
+                *t += *dt;
 
                 Some((*t0, told))
             }

@@ -11,7 +11,7 @@ pub fn marcum_q(v: i32, a: f64, b: f64) -> f64 {
         |x| {
             x.powi(v)
                 * ((x.powi(2) + a.powi(2)) / -2.00).exp()
-                * bessel::i_n(v as f64 - 1.00, x * a)
+                * bessel::i_n(f64::from(v) - 1.00, x * a)
         },
         //TODO: figure out an appropriate epsilon here
         1e-9,

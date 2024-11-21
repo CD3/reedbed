@@ -151,21 +151,21 @@ pub fn gauss_kronrod(
 ) -> (f64, f64) {
     let mut n_intervals = 1;
 
-    let mut kahan_t = 0.00;
-    let mut region_width = 0.00;
+    let mut kahan_t;
+    let mut region_width;
 
     let mut gauss_kronrod_integral = 0.00;
-    let mut gauss_kronrod_compensation = 0.00;
+    let mut gauss_kronrod_compensation;
 
-    let mut gauss_integral = 0.00;
-    let mut gauss_compensation = 0.00;
+    let mut gauss_integral;
+    let mut gauss_compensation;
 
-    let mut gauss_kronrod_acc = 0.00;
-    let mut gauss_acc = 0.00;
+    let mut gauss_kronrod_acc;
+    let mut gauss_acc;
 
     let mut relative_error = 0.00;
-    let mut absolute_region_midpoint = 0.00;
-    let mut half_region_width = 0.00;
+    let mut absolute_region_midpoint;
+    let mut half_region_width;
 
     while n_intervals <= interval_limit {
         region_width = (b.borrow() - a.borrow()) / n_intervals as f64;
@@ -206,14 +206,14 @@ pub fn gauss_kronrod(
             // the following is just the kahan summation algorithm
 
             gauss_kronrod_acc -= &gauss_kronrod_compensation;
-            kahan_t = &gauss_kronrod_integral + &gauss_kronrod_acc;
+            kahan_t = gauss_kronrod_integral + gauss_kronrod_acc;
             gauss_kronrod_compensation = kahan_t;
             gauss_kronrod_compensation -= &gauss_kronrod_integral;
             gauss_kronrod_compensation -= &gauss_kronrod_acc;
             gauss_kronrod_integral = kahan_t;
 
             gauss_acc -= &gauss_compensation;
-            kahan_t = &gauss_integral + &gauss_acc;
+            kahan_t = gauss_integral + gauss_acc;
             gauss_compensation = kahan_t;
             gauss_compensation -= &gauss_integral;
             gauss_compensation -= &gauss_acc;
@@ -254,19 +254,19 @@ pub fn tanh_sinh(
 
     //TODO: get more descriptive names for these
 
-    let mut v = 0.00;
+    let mut v;
 
-    let mut p = 0.00;
-    let mut q = 0.00;
-    let mut fp = 0.00;
-    let mut fm = 0.00;
-    let mut t = 0.00;
-    let mut eh = 0.00;
+    let mut p;
+    let mut q;
+    let mut fp;
+    let mut fm;
+    let mut t;
+    let mut eh;
 
-    let mut u = 0.00;
-    let mut r = 0.00;
-    let mut w = 0.00;
-    let mut x = 0.00;
+    let mut u;
+    let mut r;
+    let mut w;
+    let mut x;
 
     let mut temporary;
 
@@ -359,8 +359,6 @@ pub fn tanh_sinh(
 mod tests {
     use super::*;
 
-    use rug::float::Constant;
-
     //TODO: we should probably parameterize precision here somewhere
     //TODO: test tanh_sinh
 
@@ -370,44 +368,44 @@ mod tests {
     fn integrate_constant() {
         let (val, _) =
             gauss_kronrod(|_| 3.00, &G7_K15, &EPSILON, (0.00, 5.00), 64);
-        assert!((val - 15).abs() < EPSILON);
+        assert!((val - 15.00).abs() < EPSILON);
     }
 
     #[test]
     fn integrate_line() {
         let (val, _) =
             gauss_kronrod(|x| 3.00 + x, &G7_K15, &EPSILON, (0.00, 5.00), 64);
-        assert!((val - 15.00 - 25.00 / 2).abs() < EPSILON);
+        assert!((val - 15.00 - 25.00 / 2.00).abs() < EPSILON);
     }
 
     #[test]
     fn integrate_parabola() {
         let (val, _) = gauss_kronrod(
-            |x| x + 0.50 * x.powi(2.00),
+            |x| x + 0.50 * x.powi(2),
             &G7_K15,
             &EPSILON,
             (0.00, 5.00),
             64,
         );
-        assert!((val - 25.00 / 2 - 125.00 / 6).abs() < EPSILON);
+        assert!((val - 25.00 / 2.00 - 125.00 / 6.00).abs() < EPSILON);
     }
 
     #[test]
     fn integrate_sin_squared() {
         let (val, _) = gauss_kronrod(
-            |x| x.sin().square(),
+            |x| x.sin().powi(2),
             &G7_K15,
             &EPSILON,
-            (0.00, 2 * f64::consts::PI),
+            (0.00, 2.00 * f64::consts::PI),
             64,
         );
         assert!((val - f64::consts::PI).abs() < EPSILON);
 
         let (val, _) = gauss_kronrod(
-            |x| x.sin().square(),
+            |x| x.sin().powi(2),
             &G7_K15,
             &EPSILON,
-            (0.00, -2 * f64::consts::PI),
+            (0.00, -2.00 * f64::consts::PI),
             64,
         );
         assert!((val + f64::consts::PI).abs() < EPSILON);
