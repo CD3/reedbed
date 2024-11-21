@@ -36,6 +36,7 @@ pub struct Layer {
 
 /// Multiple layers of tissue
 #[derive(Serialize, Deserialize, Clone, PartialEq, Debug)]
+#[serde(transparent)]
 pub struct Layers {
     /// The layers this [`struct@Layers`] is composed of
     layers: Vec<Layer>,

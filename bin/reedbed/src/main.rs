@@ -195,7 +195,7 @@ fn main() -> anyhow::Result<()> {
                                     (a, b),
                                 );
 
-                            println!("({a}, {b}) => {rise} ~ {err}");
+                            println!("{b} {rise}");
                         }
                     }
                 }
