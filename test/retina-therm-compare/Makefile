@@ -2,9 +2,14 @@ SHELL := /bin/zsh
 
 all: plot
 
-output/:
-	mkdir -p output/reedbed
+output/: output/reedbed/ output/retina-therm/
+
+output/reedbed/:
+	mkdir -p output/reedbed/
 	powerconf render CONFIG.yml CONFIG-reedbed.yml /dev/stdout | time cargo run --release -- temperature-rise -f json	-t json > output/reedbed/Tvst.txt 2> reedbed.stderr
+
+output/retina-therm/:
+	mkdir -p output/retina-therm/
 	powerconf render CONFIG.yml CONFIG-retina-therm.yml /dev/stdout | time retina-therm temperature-rise /dev/stdin 2> retina-therm.stderr
 
 .PHONY: check
