@@ -40,7 +40,7 @@ use strum_macros::{Display, EnumString};
 mod model;
 
 use crate::model::Beam;
-use reedbed_lib::quadrature::TanhSinh;
+use reedbed_lib::quadrature;
 
 #[global_allocator]
 static GLOBAL_ALLOCATOR: mimalloc::MiMalloc = mimalloc::MiMalloc;
@@ -177,8 +177,8 @@ fn main() -> anyhow::Result<()> {
                 let configuration = configuration.context(
                     "Unable to deserialize an input configuration",
                 )?;
-                let quadrature = TanhSinh { iteration_limit: 6 };
-                let epsilon = 1e-3;
+                let quadrature = quadrature::TanhSinh { iteration_limit: 6 };
+                let epsilon = 1e-5;
 
                 match configuration.laser {
                     Beam::LargeBeam(beam) => {}

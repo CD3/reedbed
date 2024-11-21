@@ -2,6 +2,7 @@
 
 use serde::{Deserialize, Serialize};
 use statrs::function::erf::erf;
+use std::f64;
 
 use crate::{errors::Greens as Error, quadrature::Quadrature, utilities};
 
@@ -188,8 +189,28 @@ impl Beam for LargeBeam {
             / 2.0;
         let term_2 = ((z - layer.z0) * layer.mu_a * -1.00).exp();
 
-        if tp < 1e-9 {
+        if tp < 1e-10 {
             return term_1 * term_2;
+        }
+
+        let a = layer.mu_a * (alpha * tp).powf(0.5);
+        let b = (layer.z0 - z) / (4.00 * alpha * tp).powf(0.5);
+        let c = layer.d / (4.00 * alpha * tp).powf(0.5);
+        if a + b + c > 4.00 && a + b > 4.00 {
+            // asymptotically approximate erf
+            let b2 = b.powi(2);
+            let c2 = c.powi(2);
+            let tab = 2.00 * a * b;
+            let tac = 2.00 * a * c;
+            let tbc = 2.00 * b * c;
+            let factor_1 =
+                (-b2 - tab).exp() / (a + b) / f64::consts::PI.sqrt();
+            let factor_2 = (-b2 - c2 - tab - tac - tbc).exp()
+                / (a + b + c)
+                / f64::consts::PI.sqrt();
+            let term_3 = factor_1 - factor_2;
+
+            return term_1 * term_2 * term_3;
         }
 
         let term_3 = (layer.mu_a.powi(2) * tp * alpha).exp();
@@ -220,14 +241,14 @@ impl Beam for FlatTopBeam {
         r: f64,
         tp: f64,
     ) -> f64 {
-        if tp < 1e-9 && r > self.radius {
+        if tp < 1e-10 && r > self.radius {
             return 0.00;
         }
 
         let z_factor =
             LargeBeam.evaluate_with(thermal_properties, layer, z, r, tp);
 
-        if tp < 1e-9 {
+        if tp < 1e-10 {
             return z_factor;
         }
 
