@@ -234,6 +234,29 @@ pub fn gauss_kronrod(
     (gauss_kronrod_integral, relative_error)
 }
 
+// the following function is more or less a rust translation (with a number of
+// adjustments made to fit better within the reedbed source code) of the
+// c routine on page 24 of https://www.genivia.com/files/qthsh.pdf, which is
+// licensed under the mit license. as a consequence, the following routine is
+// also licensed under the mit license, which is reproduced below:
+//
+// Permission is hereby granted, free of charge, to any person obtaining a
+// copy of this software and associated documentation files (the “Software”),
+// to deal in the Software without restriction, including without limitation
+// the rights to use, copy, modify, merge, publish, distribute, sublicense,
+// and/or sell copies of the Software, and to permit persons to whom the
+// Software is furnished to do so, subject to the following conditions:
+//
+// The above copyright notice and this permission notice shall be included in
+// all copies or substantial portions of the Software.
+//
+// THE SOFTWARE IS PROVIDED “AS IS”, WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+// IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+// FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+// AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+// LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING
+// FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER
+// DEALINGS IN THE SOFTWARE.
 pub fn tanh_sinh(
     f: impl Fn(f64) -> f64,
     epsilon: impl Borrow<f64>,
