@@ -30,7 +30,6 @@
 
 use anyhow::Context;
 use clap::{Parser, Subcommand, ValueEnum};
-use rug::Float;
 use std::{
     fs::File,
     io::{self, BufReader, Read, Write},
@@ -39,7 +38,6 @@ use std::{
 use strum_macros::{Display, EnumString};
 
 mod model;
-mod utilities;
 
 use crate::model::{Beam, Interval, Time};
 use reedbed_lib::quadrature::TanhSinh;
@@ -133,25 +131,25 @@ fn main() -> anyhow::Result<()> {
             to,
         } => {
             let input_stream = BufReader::new(if let Some(name) = input {
-                Box::new(
-                    File::open(name)
-                        .context("Unable to open the file containing the computation")?,
-                ) as Box<dyn Read>
+                Box::new(File::open(name).context(
+                    "Unable to open the file containing the computation",
+                )?) as Box<dyn Read>
             } else {
                 Box::new(io::stdin()) as Box<dyn Read>
             });
 
             let input = match from
                 .or_else(|| {
-                    input
-                        .as_ref()
-                        .and_then(|n| n.rsplit_once('.'))
-                        .and_then(|s| <InputFormat as FromStr>::from_str(s.1).ok())
+                    input.as_ref().and_then(|n| n.rsplit_once('.')).and_then(
+                        |s| <InputFormat as FromStr>::from_str(s.1).ok(),
+                    )
                 })
                 .ok_or(ReedbedError::AmbiguousInput)?
             {
-                InputFormat::Json => serde_json::Deserializer::from_reader(input_stream)
-                    .into_iter::<model::Configuration>(),
+                InputFormat::Json => {
+                    serde_json::Deserializer::from_reader(input_stream)
+                        .into_iter::<model::Configuration>()
+                }
             };
 
             let output_stream = if let Some(name) = output {
@@ -164,45 +162,38 @@ fn main() -> anyhow::Result<()> {
 
             let output = match to
                 .or_else(|| {
-                    output
-                        .as_ref()
-                        .and_then(|n| n.rsplit_once('.'))
-                        .and_then(|s| <OutputFormat as FromStr>::from_str(s.1).ok())
+                    output.as_ref().and_then(|n| n.rsplit_once('.')).and_then(
+                        |s| <OutputFormat as FromStr>::from_str(s.1).ok(),
+                    )
                 })
                 .ok_or(ReedbedError::AmbiguousOutput)?
             {
-                OutputFormat::Json => serde_json::Serializer::new(output_stream),
+                OutputFormat::Json => {
+                    serde_json::Serializer::new(output_stream)
+                }
             };
 
             for configuration in input {
-                let configuration =
-                    configuration.context("Unable to deserialize an input configuration")?;
-                let thermal_properties = configuration.thermal.into_lib();
-                let layers = configuration
-                    .layers
-                    .into_lib()
-                    .context("Unable to convert the layer configuration into a Layers")?;
-                let quadrature = TanhSinh {
-                    iteration_limit: 6,
-                    precision: 64,
-                };
-                let epsilon = Float::with_val_64(64, 1e-3);
+                let configuration = configuration.context(
+                    "Unable to deserialize an input configuration",
+                )?;
+                let quadrature = TanhSinh { iteration_limit: 6 };
+                let epsilon = 1e-3;
 
                 match configuration.laser {
                     Beam::LargeBeam(beam) => {}
                     Beam::FlatTopBeam(beam) => {
-                        let beam = beam.into_lib();
                         for (a, b) in configuration.simulation.time {
-                            let (rise, err) = layers.temperature_rise(
-                                64,
-                                &quadrature,
-                                &beam,
-                                &thermal_properties,
-                                &configuration.simulation.sensor.z,
-                                &configuration.simulation.sensor.r,
-                                &epsilon,
-                                (&a, &b),
-                            );
+                            let (rise, err) =
+                                configuration.layers.temperature_rise(
+                                    &quadrature,
+                                    &beam,
+                                    &configuration.thermal,
+                                    configuration.simulation.sensor.z,
+                                    configuration.simulation.sensor.r,
+                                    epsilon,
+                                    (a, b),
+                                );
 
                             println!("({a}, {b}) => {rise} ~ {err}");
                         }

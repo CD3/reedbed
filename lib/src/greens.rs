@@ -1,56 +1,44 @@
 // SPDX-LICENSE-IDENTIFIER: GPL-3.0-or-later
 
-use rug::{float::Special, Assign, Float};
 use serde::{Deserialize, Serialize};
-use std::borrow::Cow;
+use statrs::function::erf::erf;
 
 use crate::{errors::Greens as Error, quadrature::Quadrature, utilities};
 
 /// A configuration structure for specific thermal properties
 #[derive(Serialize, Deserialize, Clone, PartialEq, Debug)]
-pub struct ThermalProperties<'a> {
+pub struct ThermalProperties {
     /// Units: g*cm^3
-    pub rho: Cow<'a, Float>,
+    pub rho: f64,
 
     /// Units: J*g^-1*K^-1
-    pub c: Cow<'a, Float>,
+    pub c: f64,
 
     /// Units: W*cm^-1*K^-1
-    pub k: Cow<'a, Float>,
+    pub k: f64,
 }
 
 /// A layer of tissue
 #[derive(Serialize, Deserialize, Clone, PartialEq, Debug)]
-pub struct Layer<'a> {
+pub struct Layer {
     /// Units: cm
-    pub d: Cow<'a, Float>,
+    pub d: f64,
 
     /// Units: cm
-    pub z0: Cow<'a, Float>,
+    pub z0: f64,
 
     /// Units: cm^-1
-    pub mu_a: Cow<'a, Float>,
+    pub mu_a: f64,
 
     /// Irradiance. Units: W*cm^-2
-    pub e0: Cow<'a, Float>,
-}
-
-impl<'a> Layer<'a> {
-    fn into_owned(self) -> Layer<'static> {
-        Layer {
-            d: Cow::Owned(self.d.into_owned()),
-            z0: Cow::Owned(self.z0.into_owned()),
-            mu_a: Cow::Owned(self.mu_a.into_owned()),
-            e0: Cow::Owned(self.e0.into_owned()),
-        }
-    }
+    pub e0: f64,
 }
 
 /// Multiple layers of tissue
 #[derive(Serialize, Deserialize, Clone, PartialEq, Debug)]
 pub struct Layers {
     /// The layers this [`struct@Layers`] is composed of
-    layers: Vec<Layer<'static>>,
+    layers: Vec<Layer>,
 }
 
 impl Layers {
@@ -61,51 +49,27 @@ impl Layers {
     /// downward according to Beer's Law
     ///
     /// If the input layers overlap in any way, an error is returned
-    pub fn new<'a>(input_layers: impl IntoIterator<Item = Layer<'a>>) -> Result<Self, Error> {
-        Self::new_static(input_layers.into_iter().map(|layer| layer.into_owned()))
-    }
-
-    /// Creates a new [`struct@Layers`] from multiple static [`struct@Layer`]s
-    ///
-    /// If the input layers are not sorted in order of incidence, they are
-    /// sorted. Irradiance is taken from the topmost layer and propagated
-    /// downward according to Beer's Law
-    ///
-    /// If the input layers overlap in any way, an error is returned
-    pub fn new_static(
-        input_layers: impl IntoIterator<Item = Layer<'static>>,
+    pub fn new(
+        input_layers: impl IntoIterator<Item = Layer>,
     ) -> Result<Self, Error> {
         let mut layers = input_layers.into_iter().collect::<Vec<_>>();
-
-        layers.sort_by(|a, b| a.z0.total_cmp(b.z0.as_ref()));
+        layers.sort_by(|a, b| a.z0.total_cmp(&b.z0));
 
         if let Some(layer) = layers.first() {
-            let mut e0 = layer.e0.clone().into_owned();
-
-            let mut z0 = layer.z0.clone().into_owned();
-            z0 += layer.d.as_ref();
-
-            let mut b = layer.d.clone().into_owned();
-            b *= layer.mu_a.as_ref();
-            b *= -1;
-            b.exp_mut();
-            e0 *= &b;
+            let mut e0 = layer.e0;
+            let mut z0 = layer.z0 + layer.d;
+            let mut b = (layer.d * layer.mu_a * -1.00).exp();
+            e0 *= b;
 
             for layer in layers.iter_mut().skip(1) {
-                if layer.z0.as_ref() < &z0 {
+                if layer.z0 < z0 {
                     return Err(Error::LayerOverlap);
                 }
 
-                layer.e0.to_mut().assign(&e0);
-
-                z0.assign(layer.z0.as_ref());
-                z0 += layer.d.as_ref();
-
-                b.assign(layer.d.as_ref());
-                b *= layer.mu_a.as_ref();
-                b *= -1;
-                b.exp_mut();
-                e0 *= &b;
+                layer.e0 = e0;
+                z0 = layer.z0 + layer.d;
+                b = (layer.d * layer.mu_a * -1.00).exp();
+                e0 *= b;
             }
         }
 
@@ -116,24 +80,17 @@ impl Layers {
     ///
     /// The input irradiance is set as-is on the topmost layer and is
     /// propagated downward according to Beer's Law
-    pub fn set_e0(&mut self, mut e0: Float) {
+    pub fn set_e0(&mut self, mut e0: f64) {
         if let Some(layer) = self.layers.first_mut() {
-            layer.e0 = Cow::Owned(e0.clone());
-
-            let mut b = layer.d.clone().into_owned();
-            b *= layer.mu_a.as_ref();
-            b *= -1;
-            b.exp_mut();
-            e0 *= &b;
+            layer.e0 = e0;
+            let mut b = (layer.d * layer.mu_a * -1.00).exp();
+            e0 *= b;
 
             for layer in self.layers.iter_mut().skip(1) {
-                layer.e0.to_mut().assign(&e0);
+                layer.e0 = e0;
 
-                b.assign(layer.d.as_ref());
-                b *= layer.mu_a.as_ref();
-                b *= -1;
-                b.exp_mut();
-                e0 *= &b;
+                b = (layer.d * layer.mu_a * -1.00).exp();
+                e0 *= b;
             }
         }
     }
@@ -144,17 +101,16 @@ impl Layers {
     /// Not all implementations of [`trait@Beam`] will use all parameters
     pub fn evaluate_with(
         &self,
-        precision: u64,
         beam: &impl Beam,
-        thermal_properties: &ThermalProperties<'_>,
-        z: &Float,
-        r: &Float,
-        tp: &Float,
-    ) -> Float {
-        let mut sum = Float::with_val_64(precision, Special::Zero);
+        thermal_properties: &ThermalProperties,
+        z: f64,
+        r: f64,
+        tp: f64,
+    ) -> f64 {
+        let mut sum = 0.00;
 
         for layer in &self.layers {
-            sum += beam.evaluate_with(precision, thermal_properties, layer, z, r, tp);
+            sum += beam.evaluate_with(thermal_properties, layer, z, r, tp);
         }
 
         sum
@@ -167,17 +123,16 @@ impl Layers {
     #[allow(clippy::too_many_arguments)]
     pub fn temperature_rise(
         &self,
-        precision: u64,
-        quadrature: &impl Quadrature<Float>,
+        quadrature: &impl Quadrature<f64>,
         beam: &impl Beam,
-        thermal_properties: &ThermalProperties<'_>,
-        z: &Float,
-        r: &Float,
-        epsilon: &Float,
-        bounds: (&Float, &Float),
-    ) -> (Float, Float) {
+        thermal_properties: &ThermalProperties,
+        z: f64,
+        r: f64,
+        epsilon: f64,
+        bounds: (f64, f64),
+    ) -> (f64, f64) {
         quadrature.integrate(
-            |t| self.evaluate_with(precision, beam, thermal_properties, z, r, &t),
+            |t| self.evaluate_with(beam, thermal_properties, z, r, t),
             epsilon,
             bounds,
         )
@@ -194,15 +149,14 @@ pub trait Beam {
     /// [`struct@ThermalProperties`]
     ///
     /// Not all implementations of [`trait@Beam`] will use all parameters
-    fn evaluate_with<'a>(
+    fn evaluate_with(
         &self,
-        precision: u64,
-        thermal_properties: &ThermalProperties<'a>,
-        layer: &Layer<'a>,
-        z: &Float,
-        r: &Float,
-        tp: &Float,
-    ) -> Float;
+        thermal_properties: &ThermalProperties,
+        layer: &Layer,
+        z: f64,
+        r: f64,
+        tp: f64,
+    ) -> f64;
 }
 
 //TODO: add documentation describing what this is
@@ -214,135 +168,81 @@ impl Beam for LargeBeam {
     //      doesn't need to take r. however, this could also be addressed with
     //      the genericization of this method at the trait level. see above
     //      for more details
-    fn evaluate_with<'a>(
+    fn evaluate_with(
         &self,
-        precision: u64,
-        thermal_properties: &ThermalProperties<'a>,
-        layer: &Layer<'a>,
-        z: &Float,
-        _r: &Float,
-        tp: &Float,
-    ) -> Float {
+        thermal_properties: &ThermalProperties,
+        layer: &Layer,
+        z: f64,
+        _r: f64,
+        tp: f64,
+    ) -> f64 {
         //TODO: make this less naive
 
-        let mut alpha = Float::with_val_64(precision, thermal_properties.k.as_ref());
-        alpha /= thermal_properties.rho.as_ref();
-        alpha /= thermal_properties.c.as_ref();
+        let mut alpha = thermal_properties.k
+            / thermal_properties.rho
+            / thermal_properties.c;
+        let mut term_1 = (layer.mu_a * layer.e0)
+            / thermal_properties.rho
+            / thermal_properties.c
+            / 2.0;
+        let mut term_2 = ((z - layer.z0) * layer.mu_a * -1.00).exp();
 
-        let mut term_1 = Float::with_val_64(precision, layer.mu_a.as_ref());
-        term_1 *= layer.e0.as_ref();
-        term_1 /= thermal_properties.rho.as_ref();
-        term_1 /= thermal_properties.c.as_ref();
-        term_1 /= 2.0;
-
-        let mut term_2 = Float::with_val_64(precision, z);
-        term_2 -= layer.z0.as_ref();
-        term_2 *= layer.mu_a.as_ref();
-        term_2 *= -1;
-        term_2.exp_mut();
-
-        if *tp == 0 {
+        if tp < 1e-9 {
             return term_1 * term_2;
         }
 
-        let mut term_3 = Float::with_val_64(precision, layer.mu_a.as_ref());
-        term_3.square_mut();
-        term_3 *= tp;
-        term_3 *= &alpha;
-        term_3.exp_mut();
-
-        let mut reciprocal_sqrt = Float::with_val_64(precision, &alpha);
-        reciprocal_sqrt *= tp;
-        reciprocal_sqrt *= 4.0;
-        reciprocal_sqrt.sqrt_mut();
-        reciprocal_sqrt.recip_mut();
-
-        let mut sqrt_mu_a = alpha;
-        sqrt_mu_a *= tp;
-        sqrt_mu_a.sqrt_mut();
-        sqrt_mu_a *= layer.mu_a.as_ref();
-
-        let mut argument_1 = Float::with_val_64(precision, layer.z0.as_ref());
-        argument_1 += layer.d.as_ref();
-        argument_1 -= z;
-        argument_1 *= &reciprocal_sqrt;
-        argument_1 += &sqrt_mu_a;
-        argument_1.erf_mut();
-
-        let mut argument_2 = Float::with_val_64(precision, layer.z0.as_ref());
-        argument_2 -= z;
-        argument_2 *= &reciprocal_sqrt;
-        argument_2 += &sqrt_mu_a;
-        argument_2.erf_mut();
-
-        let mut term_4 = argument_1;
-        term_4 -= argument_2;
+        let mut term_3 = (layer.mu_a.powi(2) * tp * alpha).exp();
+        let mut reciprocal_sqrt = (alpha * tp * 4.00).sqrt().recip();
+        let mut sqrt_mu_a = (alpha * tp).sqrt() * layer.mu_a;
+        let mut argument_1 =
+            erf(((layer.z0 + layer.d - z) * reciprocal_sqrt) + sqrt_mu_a);
+        let mut argument_2 =
+            erf(((layer.z0 - z) * reciprocal_sqrt) + sqrt_mu_a);
+        let mut term_4 = argument_1 - argument_2;
 
         term_1 * term_2 * term_3 * term_4
     }
 }
 
 #[derive(Serialize, Deserialize, Clone, PartialEq, Debug)]
-pub struct FlatTopBeam<'a> {
+pub struct FlatTopBeam {
     /// Units: cm
-    pub radius: Cow<'a, Float>,
+    pub radius: f64,
 }
 
-impl<'a> Beam for FlatTopBeam<'a> {
+impl Beam for FlatTopBeam {
     //TODO: same todo as above
-    fn evaluate_with<'b>(
+    fn evaluate_with(
         &self,
-        precision: u64,
-        thermal_properties: &ThermalProperties<'b>,
-        layer: &Layer<'b>,
-        z: &Float,
-        r: &Float,
-        tp: &Float,
-    ) -> Float {
-        let radius = self.radius.as_ref();
-
-        if *tp == 0 && r > radius {
-            return Float::with_val_64(precision, Special::Zero);
+        thermal_properties: &ThermalProperties,
+        layer: &Layer,
+        z: f64,
+        r: f64,
+        tp: f64,
+    ) -> f64 {
+        if tp < 1e-9 && r > self.radius {
+            return 0.00;
         }
 
-        let z_factor = LargeBeam.evaluate_with(precision, thermal_properties, layer, z, r, tp);
+        let z_factor =
+            LargeBeam.evaluate_with(thermal_properties, layer, z, r, tp);
 
-        if *tp == 0 {
+        if tp < 1e-9 {
             return z_factor;
         }
 
-        //TODO: don't duplicate this between the code in LargeBeam and this
-        //      function
-        let mut alpha = Float::with_val_64(precision, thermal_properties.k.as_ref());
-        alpha /= thermal_properties.rho.as_ref();
-        alpha /= thermal_properties.c.as_ref();
+        let mut alpha = thermal_properties.k
+            / thermal_properties.rho
+            / thermal_properties.c;
 
         z_factor
-            * if *r == 0 {
-                let mut r_factor = Float::with_val_64(precision, radius);
-                r_factor.square_mut();
-                r_factor /= -4.0;
-                r_factor /= alpha;
-                r_factor /= tp;
-                r_factor.exp_mut();
-                r_factor = 1 - r_factor;
-                r_factor
+            * if r < 1e-9 {
+                1.00 - (self.radius.powi(2) / -4.00 / alpha / tp).exp()
             } else {
                 //TODO: this is not accurate at all. fix the marcum-q function
                 //      implementation
-
-                let mut a = Float::with_val_64(precision, 2.0);
-                a *= alpha;
-                a *= tp;
-                a.recip_mut();
-
-                let mut b = a.clone();
-                b *= radius;
-                a *= r;
-
-                let mut r_factor = utilities::marcum_q(1, &a, &b, precision);
-                r_factor = 1 - r_factor;
-                r_factor
+                let a = (2.0 * alpha * tp).recip();
+                1.00 - utilities::marcum_q(1, a, a * self.radius * r)
             }
     }
 }
@@ -353,18 +253,17 @@ impl<'a> Beam for FlatTopBeam<'a> {
 #[inline]
 #[allow(clippy::too_many_arguments)]
 pub fn temperature_rise(
-    precision: u64,
-    quadrature: &impl Quadrature<Float>,
+    quadrature: &impl Quadrature<f64>,
     beam: &impl Beam,
-    thermal_properties: &ThermalProperties<'_>,
-    layer: &Layer<'_>,
-    z: &Float,
-    r: &Float,
-    epsilon: &Float,
-    bounds: (&Float, &Float),
-) -> (Float, Float) {
+    thermal_properties: &ThermalProperties,
+    layer: &Layer,
+    z: f64,
+    r: f64,
+    epsilon: f64,
+    bounds: (f64, f64),
+) -> (f64, f64) {
     quadrature.integrate(
-        |t| beam.evaluate_with(precision, thermal_properties, layer, z, r, &t),
+        |t| beam.evaluate_with(thermal_properties, layer, z, r, t),
         epsilon,
         bounds,
     )
@@ -398,19 +297,38 @@ mod tests {
         };
 
         assert_eq!(
-            LargeBeam.evaluate_with(64, &thermal_properties, &layer, &ZERO, &ZERO, &ZERO),
+            LargeBeam.evaluate_with(
+                64,
+                &thermal_properties,
+                &layer,
+                &ZERO,
+                &ZERO,
+                &ZERO
+            ),
             5e-1
         );
 
-        let mut result =
-            LargeBeam.evaluate_with(64, &thermal_properties, &layer, &ONE, &ZERO, &ZERO);
+        let mut result = LargeBeam.evaluate_with(
+            64,
+            &thermal_properties,
+            &layer,
+            &ONE,
+            &ZERO,
+            &ZERO,
+        );
         // reference result: 0.5 * e^-1
         result -= 1.8393972058572116080e-1;
         result.abs_mut();
         assert!(result < *EPSILON);
 
-        let mut result =
-            LargeBeam.evaluate_with(64, &thermal_properties, &layer, &ONE, &ZERO, &ONE);
+        let mut result = LargeBeam.evaluate_with(
+            64,
+            &thermal_properties,
+            &layer,
+            &ONE,
+            &ZERO,
+            &ONE,
+        );
         // reference result: 0.5 * e^-1 * e^1 * (erf(1) - erf(-1/sqrt(4) + 1))
         result -= 1.6110045756833416583e-1;
         result.abs_mut();
@@ -436,17 +354,38 @@ mod tests {
         };
 
         assert_eq!(
-            beam.evaluate_with(64, &thermal_properties, &layer, &ZERO, &ZERO, &ZERO),
+            beam.evaluate_with(
+                64,
+                &thermal_properties,
+                &layer,
+                &ZERO,
+                &ZERO,
+                &ZERO
+            ),
             5e-1
         );
 
-        let mut result = beam.evaluate_with(64, &thermal_properties, &layer, &ONE, &ZERO, &ZERO);
+        let mut result = beam.evaluate_with(
+            64,
+            &thermal_properties,
+            &layer,
+            &ONE,
+            &ZERO,
+            &ZERO,
+        );
         // reference result: 0.5 * e^-1 * (1 - 0)
         result -= 1.8393972058572116080e-1;
         result.abs_mut();
         assert!(result < *EPSILON);
 
-        let mut result = beam.evaluate_with(64, &thermal_properties, &layer, &ONE, &ZERO, &ONE);
+        let mut result = beam.evaluate_with(
+            64,
+            &thermal_properties,
+            &layer,
+            &ONE,
+            &ZERO,
+            &ONE,
+        );
         // reference result: 0.5 * e^-1 * e^1 * (erf(1) - erf(-1/sqrt(4) + 1))
         //                       * (1 - e^(-1/4))
         result -= 3.5635295060953884529e-2;
@@ -468,11 +407,25 @@ mod tests {
             mu_a: Cow::Borrowed(&ONE),
             e0: Cow::Borrowed(&ONE),
         };
-        let layers = Layers::new([layer.clone()]).expect("Unable to construct a Layers");
+        let layers = Layers::new([layer.clone()])
+            .expect("unable to construct a Layers structure");
 
-        let mut result =
-            layers.evaluate_with(64, &LargeBeam, &thermal_properties, &ONE, &ZERO, &ONE);
-        result -= LargeBeam.evaluate_with(64, &thermal_properties, &layer, &ONE, &ZERO, &ONE);
+        let mut result = layers.evaluate_with(
+            64,
+            &LargeBeam,
+            &thermal_properties,
+            &ONE,
+            &ZERO,
+            &ONE,
+        );
+        result -= LargeBeam.evaluate_with(
+            64,
+            &thermal_properties,
+            &layer,
+            &ONE,
+            &ZERO,
+            &ONE,
+        );
         assert!(result < *EPSILON);
 
         let layers = Layers::new([
@@ -489,7 +442,7 @@ mod tests {
                 e0: Cow::Borrowed(&ZERO),
             },
         ])
-        .expect("Unable to construct a Layers");
+        .expect("unable to construct a Layers structure");
 
         let layer = Layer {
             d: Cow::Owned(Float::with_val_64(64, 2)),
@@ -504,8 +457,22 @@ mod tests {
 
         let small = Float::with_val_64(64, 1e-6);
 
-        let mut result = layers.evaluate_with(64, &beam, &thermal_properties, &ZERO, &ZERO, &small);
-        result -= beam.evaluate_with(64, &thermal_properties, &layer, &ZERO, &ZERO, &small);
+        let mut result = layers.evaluate_with(
+            64,
+            &beam,
+            &thermal_properties,
+            &ZERO,
+            &ZERO,
+            &small,
+        );
+        result -= beam.evaluate_with(
+            64,
+            &thermal_properties,
+            &layer,
+            &ZERO,
+            &ZERO,
+            &small,
+        );
         assert!(result < *EPSILON);
     }
 }

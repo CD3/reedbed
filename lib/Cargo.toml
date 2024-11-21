@@ -11,11 +11,8 @@ edition = "2021"
 license = "GPL-3.0-or-later"
 
 [dependencies]
-thiserror = "1"
-
-[dependencies.rug]
-version = "1"
-features = ["serde"]
+thiserror = "2"
+statrs = "0.17"
 
 [dependencies.serde]
 version = "1"
