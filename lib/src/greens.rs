@@ -263,7 +263,7 @@ impl Beam for FlatTopBeam {
                 //TODO: this is not accurate at all. fix the marcum-q function
                 //      implementation
                 let a = (2.0 * alpha * tp).recip();
-                1.00 - utilities::marcum_q(1, a, a * self.radius * r)
+                1.00 - utilities::marcum_q(1.00, a, a * self.radius * r)
             }
     }
 }
