@@ -153,7 +153,7 @@ fn main() -> anyhow::Result<()> {
             };
 
             let output_stream = if let Some(name) = output {
-                Box::new(File::open(name).context(
+                Box::new(File::create(name).context(
                     "Unable to open the file intended to hold the results of the computation",
                 )?) as Box<dyn Write>
             } else {
