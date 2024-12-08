@@ -35,9 +35,15 @@ pub struct Layer {
     pub e0: f64,
 }
 
+impl From<Layers> for Vec<Layer> {
+    fn from(layers: Layers) -> Self {
+        layers.layers
+    }
+}
+
 /// Multiple layers of tissue
 #[derive(Serialize, Deserialize, Clone, PartialEq, Debug)]
-#[serde(transparent)]
+#[serde(try_from = "Vec<Layer>", into = "Vec<Layer>")]
 pub struct Layers {
     /// The layers this [`struct@Layers`] is composed of
     layers: Vec<Layer>,
@@ -138,6 +144,14 @@ impl Layers {
             epsilon,
             bounds,
         )
+    }
+}
+
+impl TryFrom<Vec<Layer>> for Layers {
+    type Error = Error;
+
+    fn try_from(input_layers: Vec<Layer>) -> Result<Self, Self::Error> {
+        Self::new(input_layers)
     }
 }
 
@@ -257,11 +271,9 @@ impl Beam for FlatTopBeam {
             / thermal_properties.c;
 
         z_factor
-            * if r < 1e-9 {
+            * if r < 1e-10 {
                 1.00 - (self.radius.powi(2) / -4.00 / alpha / tp).exp()
             } else {
-                //TODO: this is not accurate at all. fix the marcum-q function
-                //      implementation
                 let a = (2.0 * alpha * tp).recip();
                 1.00 - utilities::marcum_q(1.00, a, a * self.radius * r)
             }

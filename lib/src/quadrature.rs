@@ -50,7 +50,7 @@ pub struct GaussKronrod<'a> {
     pub rule: &'a [(f64, f64, Option<f64>)],
 }
 
-impl<'a> Quadrature<f64> for GaussKronrod<'a> {
+impl Quadrature<f64> for GaussKronrod<'_> {
     fn integrate(
         &self,
         f: impl Fn(f64) -> f64,
