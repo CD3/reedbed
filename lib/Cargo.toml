@@ -12,7 +12,7 @@ license = "GPL-3.0-or-later"
 
 [dependencies]
 thiserror = "2"
-statrs = "0.17"
+statrs = "0.18"
 # remove this and write a custom implementation of the marcum-q function in
 # rust at some point
 r_mathlib = "0.2"
