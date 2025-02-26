@@ -31,5 +31,8 @@
 pub mod bessel;
 pub mod errors;
 pub mod greens;
+pub mod multiple_pulse;
 pub mod quadrature;
+pub mod simulation;
+pub mod tasks;
 pub mod utilities;

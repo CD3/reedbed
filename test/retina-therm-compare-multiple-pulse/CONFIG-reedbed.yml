@@ -1,5 +1,5 @@
 {
-  "kind": "TemperatureRise",
+  "kind": "MultiplePulse",
   "thermal": {
     "k": {{reedbed/thermal/k}},
     "rho": {{reedbed/thermal/rho}},
@@ -34,5 +34,12 @@
       "dt": {{reedbed/simulation/time/dt}},
       "tmax": {{reedbed/simulation/time/tmax}}
     }
-  }
+  },
+  "pulses": [
+    {
+      "arrival_time": {{reedbed/pulses/0/arrival_time}},
+      "duration": {{reedbed/pulses/0/duration}},
+      "scale": {{reedbed/pulses/0/scale}}
+    }
+  ]
 }

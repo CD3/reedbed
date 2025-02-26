@@ -2,34 +2,6 @@
 
 use serde::{Deserialize, Serialize};
 
-use reedbed_lib::greens::{
-    FlatTopBeam, LargeBeam, Layers, ThermalProperties,
-};
-
-/// Configuration of the entire simulation
-#[derive(Serialize, Deserialize, Clone, PartialEq, Debug)]
-pub struct Configuration {
-    /// Thermal properties
-    pub thermal: ThermalProperties,
-
-    /// Retinal tissue layers
-    pub layers: Layers,
-
-    /// Beam parameters
-    pub laser: Beam,
-
-    /// Simulation parameters
-    pub simulation: Simulation,
-}
-
-/// Container for different kinds of [`trait@Beam`]s
-#[derive(Serialize, Deserialize, Clone, PartialEq, Debug)]
-#[serde(tag = "kind")]
-pub enum Beam {
-    LargeBeam(LargeBeam),
-    FlatTopBeam(FlatTopBeam),
-}
-
 /// Simulation parameters
 #[derive(Serialize, Deserialize, Clone, PartialEq, Debug)]
 pub struct Simulation {

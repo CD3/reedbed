@@ -7,14 +7,14 @@ repository = "https://github.com/superwhiskers/reedbed"
 readme = "../readme.md"
 keywords = ["numerical-approximation", "scientific-computing"]
 categories = ["Science", "Simulation", "Mathematics"]
-edition = "2021"
+edition = "2024"
 license = "GPL-3.0-or-later"
 
 [dependencies]
 mimalloc = "0.1"
 anyhow = "1"
-strum = "0.26"
-strum_macros = "0.26"
+strum = "0.27"
+strum_macros = "0.27"
 thiserror = "2"
 serde_json = "1"
 serde_with = "3"

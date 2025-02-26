@@ -1,0 +1,53 @@
+laser:
+  R : 100 um
+  E0: 1 W/cm^2
+layers:
+- d: 10 um
+  mua: 300 1/cm
+  z0: 0 um
+- d: 100 um
+  mua: 50 1/cm
+  z0: 10 um
+simulation:
+  sensor:
+    r: 0 um
+    z: 0 um
+  time:
+    dt: 100 us
+    tmax: 10 s
+thermal:
+  k: 0.006306 W/cm/K
+  rho: 1 g / cm^3
+  c: 4.178 J /g/ K
+pulses:
+  - arrival_time: 0 s
+    duration: 0.5 s
+    scale: 1.0
+
+reedbed:
+  thermal:
+    k: $(${/thermal/k}.to("W / cm / K").magnitude)
+    c: $(${/thermal/c}.to("J / g / K").magnitude)
+    rho: $(${/thermal/rho}.to("g/cm^3").magnitude)
+  layers:
+    - e0: $(${/laser/E0}.to("W/cm^2").magnitude)
+      mu_a: $(${/layers/0/mua}.to("1/cm").magnitude)
+      d: $(${/layers/0/d}.to("cm").magnitude)
+      z0: $(${/layers/0/z0}.to("cm").magnitude)
+    - e0: $(${/laser/E0}.to("W/cm^2").magnitude)
+      mu_a: $(${/layers/1/mua}.to("1/cm").magnitude)
+      d: $(${/layers/1/d}.to("cm").magnitude)
+      z0: $(${/layers/1/z0}.to("cm").magnitude)
+  simulation:
+    sensor:
+      z: $(${/simulation/sensor/z}.to("cm").magnitude)
+      r: $(${/simulation/sensor/r}.to("cm").magnitude)
+    time:
+      dt: $(${/simulation/time/dt}.to("s").magnitude)
+      tmax: $(${/simulation/time/tmax}.to("s").magnitude)
+  laser:
+    radius: $(${/laser/R}.to("cm").magnitude)
+  pulses:
+    - arrival_time: $(${/pulses/0/arrival_time}.to("s").magnitude)
+      duration: $(${/pulses/0/duration}.to("s").magnitude)
+      scale: $(${/pulses/0/scale})

@@ -7,7 +7,7 @@ repository = "https://github.com/superwhiskers/reedbed"
 readme = "../readme.md"
 keywords = ["numerical-approximation", "scientific-computing"]
 categories = ["Science", "Simulation", "Mathematics"]
-edition = "2021"
+edition = "2024"
 license = "GPL-3.0-or-later"
 
 [dependencies]
@@ -22,4 +22,4 @@ version = "1"
 features = ["derive"]
 
 [dev-dependencies]
-ctor = "0.2"
+ctor = "0.3"

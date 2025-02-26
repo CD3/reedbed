@@ -37,10 +37,11 @@ use std::{
 };
 use strum_macros::{Display, EnumString};
 
-mod model;
-
-use crate::model::Beam;
-use reedbed_lib::quadrature;
+use reedbed_lib::{
+    multiple_pulse::{self, Pulse},
+    quadrature,
+    tasks::{Beam, MultiplePulse, Operation, TemperatureRise},
+};
 
 #[global_allocator]
 static GLOBAL_ALLOCATOR: mimalloc::MiMalloc = mimalloc::MiMalloc;
@@ -66,9 +67,8 @@ struct Cli {
 
 #[derive(Subcommand, Debug)]
 enum Commands {
-    /// Computes the temperature rise resulting from laser exposure in retinal
-    /// tissue at given points in time
-    TemperatureRise {
+    /// Start executing configurations input either through a file or stdin
+    Start {
         /// The input file describing the computation. If none is provided,
         /// then stdin is used
         #[arg(value_name = "IN")]
@@ -124,7 +124,7 @@ fn main() -> anyhow::Result<()> {
     let app = Cli::parse();
 
     match app.command {
-        Commands::TemperatureRise {
+        Commands::Start {
             ref input,
             from,
             ref output,
@@ -148,7 +148,7 @@ fn main() -> anyhow::Result<()> {
             {
                 InputFormat::Json => {
                     serde_json::Deserializer::from_reader(input_stream)
-                        .into_iter::<model::Configuration>()
+                        .into_iter::<Operation>()
                 }
             };
 
@@ -173,6 +173,8 @@ fn main() -> anyhow::Result<()> {
                 }
             };
 
+            // initialize task system here
+
             for configuration in input {
                 let configuration = configuration.context(
                     "Unable to deserialize an input configuration",
@@ -180,22 +182,70 @@ fn main() -> anyhow::Result<()> {
                 let quadrature = quadrature::TanhSinh { iteration_limit: 6 };
                 let epsilon = 1e-5;
 
-                match configuration.laser {
-                    Beam::LargeBeam(beam) => {}
-                    Beam::FlatTopBeam(beam) => {
-                        for (a, b) in configuration.simulation.time {
-                            let (rise, err) =
-                                configuration.layers.temperature_rise(
+                match configuration {
+                    Operation::TemperatureRise(TemperatureRise {
+                        thermal,
+                        layers,
+                        laser,
+                        simulation,
+                    }) => match laser {
+                        Beam::LargeBeam(_) => {}
+                        Beam::FlatTopBeam(beam) => {
+                            for (a, b) in simulation.time {
+                                let (rise, _err) = layers.temperature_rise(
                                     &quadrature,
                                     &beam,
-                                    &configuration.thermal,
-                                    configuration.simulation.sensor.z,
-                                    configuration.simulation.sensor.r,
+                                    &thermal,
+                                    simulation.sensor.z,
+                                    simulation.sensor.r,
                                     epsilon,
                                     (a, b),
                                 );
 
-                            println!("{b} {rise}");
+                                println!("{b} {rise}");
+                            }
+                        }
+                    },
+                    Operation::MultiplePulse(MultiplePulse {
+                        thermal,
+                        layers,
+                        laser,
+                        simulation,
+                        pulses,
+                    }) => {
+                        let regions = multiple_pulse::extract_temperature_rise_computations(&pulses, simulation.time.clone());
+
+                        match laser {
+                            Beam::LargeBeam(_) => {}
+                            Beam::FlatTopBeam(beam) => {
+                                for ((_, b), pulses) in
+                                    simulation.time.into_iter().zip(regions)
+                                {
+                                    let mut rise = 0.0;
+
+                                    for Pulse {
+                                        arrival_time,
+                                        duration,
+                                        scale,
+                                    } in pulses
+                                    {
+                                        let (individual_rise, _err) = layers
+                                            .temperature_rise(
+                                                &quadrature,
+                                                &beam,
+                                                &thermal,
+                                                simulation.sensor.z,
+                                                simulation.sensor.r,
+                                                epsilon,
+                                                (0.0, duration),
+                                            );
+
+                                        rise += scale * individual_rise;
+                                    }
+
+                                    println!("{b} {rise}");
+                                }
+                            }
                         }
                     }
                 }
