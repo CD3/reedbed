@@ -180,7 +180,7 @@ fn main() -> anyhow::Result<()> {
                     "Unable to deserialize an input configuration",
                 )?;
                 let quadrature = quadrature::TanhSinh { iteration_limit: 6 };
-                let epsilon = 1e-5;
+                let epsilon = 1e-10;
 
                 match configuration {
                     Operation::TemperatureRise(TemperatureRise {
@@ -222,6 +222,7 @@ fn main() -> anyhow::Result<()> {
                                     simulation.time.into_iter().zip(regions)
                                 {
                                     let mut rise = 0.0;
+                                    let mut compensation = 0.0;
 
                                     for Pulse {
                                         arrival_time,
@@ -240,7 +241,12 @@ fn main() -> anyhow::Result<()> {
                                                 (0.0, duration),
                                             );
 
-                                        rise += scale * individual_rise;
+                                        // kahan summation algorithm
+                                        let y = (scale * individual_rise)
+                                            - compensation;
+                                        let t = rise + y;
+                                        compensation = (t - rise) - y;
+                                        rise = t;
                                     }
 
                                     println!("{b} {rise}");

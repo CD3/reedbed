@@ -23,4 +23,4 @@ clean:
 
 .PHONY: plot
 plot: run
-	cd output && gnuplot --persist -e 'plot "reedbed/Tvst.txt", "retina-therm/Tvst.txt"'
+	cd output && gnuplot --persist -e 'plot "reedbed/Tvst.txt" using 1:2 with line title "rise"'
