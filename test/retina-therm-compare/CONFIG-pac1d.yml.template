@@ -1,0 +1,47 @@
+simulation:
+  time:
+    max: {{pac1d/simulation/time/max}}
+    dt: {{pac1d/simulation/time/dt}}
+  grid:
+      n: {{pac1d/simulation/grid/n}}
+      max: {{pac1d/simulation/grid/max}}
+  baseline_temperature: 37 degC
+  ambient_temperature: 20 degC
+
+sensors:
+  - z: {{pac1d/sensors/0/z}}
+    type: temperature
+    filename: {{pac1d/sensors/0/filename}}
+  - t: {{pac1d/simulation/time/max}}
+    type: temperature distribution
+    filename: {{pac1d/sensors/1/filename}}
+
+laser:
+  duration: {{pac1d/laser/duration}}
+  irradiance: {{pac1d/laser/irradiance}}
+
+layers:
+  - name: layer-0
+    thickness: {{pac1d/layers/0/thickness}}
+    absorption_coefficient: {{pac1d/layers/0/absorption_coefficient}}
+    conductivity: {{pac1d/layers/0/conductivity}}
+    specific_heat: {{pac1d/layers/0/specific_heat}}
+    density: {{pac1d/layers/0/density}}
+  - name: layer-1
+    thickness: {{pac1d/layers/1/thickness}}
+    absorption_coefficient: {{pac1d/layers/1/absorption_coefficient}}
+    conductivity: {{pac1d/layers/1/conductivity}}
+    specific_heat: {{pac1d/layers/1/specific_heat}}
+    density: {{pac1d/layers/1/density}}
+  - name: layer-2
+    thickness: {{pac1d/layers/2/thickness}}
+    absorption_coefficient: {{pac1d/layers/2/absorption_coefficient}}
+    conductivity: {{pac1d/layers/2/conductivity}}
+    specific_heat: {{pac1d/layers/2/specific_heat}}
+    density: {{pac1d/layers/2/density}}
+  - name: layer-3
+    thickness: {{pac1d/layers/3/thickness}}
+    absorption_coefficient: {{pac1d/layers/3/absorption_coefficient}}
+    conductivity: {{pac1d/layers/3/conductivity}}
+    specific_heat: {{pac1d/layers/3/specific_heat}}
+    density: {{pac1d/layers/3/density}}

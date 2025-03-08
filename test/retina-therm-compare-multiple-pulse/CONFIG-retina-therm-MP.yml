@@ -1,0 +1,8 @@
+input_file: output/retina-therm/Tvst-CW.txt
+output_file: output/retina-therm/Tvst-MP.txt
+tau: 5 millisecond
+contributions:
+  - arrival_time: 0 second
+    scale: 1.0
+  - arrival_time: 10 millisecond
+    scale: 2.0

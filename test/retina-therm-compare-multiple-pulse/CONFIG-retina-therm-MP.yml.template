@@ -1,0 +1,8 @@
+input_file: {{retina-therm/simulation/cw_output_file}}
+output_file: {{retina-therm/simulation/mp_output_file}}
+tau: {{retina-therm/tau}}
+contributions:
+  - arrival_time: {{retina-therm/contributions/0/arrival_time}}
+    scale: {{retina-therm/contributions/0/scale}}
+  - arrival_time: {{retina-therm/contributions/1/arrival_time}}
+    scale: {{retina-therm/contributions/1/scale}}

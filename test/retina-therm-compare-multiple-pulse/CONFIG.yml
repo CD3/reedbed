@@ -14,15 +14,18 @@ simulation:
     z: 0 um
   time:
     dt: 100 us
-    tmax: 10 s
+    tmax: 100 ms
 thermal:
   k: 0.006306 W/cm/K
   rho: 1 g / cm^3
   c: 4.178 J /g/ K
 pulses:
   - arrival_time: 0 s
-    duration: 0.5 s
+    duration: 5 ms
     scale: 1.0
+  - arrival_time: 10 ms
+    duration: 20 ms
+    scale: 2.0
 
 reedbed:
   thermal:
@@ -51,3 +54,41 @@ reedbed:
     - arrival_time: $(${/pulses/0/arrival_time}.to("s").magnitude)
       duration: $(${/pulses/0/duration}.to("s").magnitude)
       scale: $(${/pulses/0/scale})
+    - arrival_time: $(${/pulses/1/arrival_time}.to("s").magnitude)
+      duration: $(${/pulses/1/duration}.to("s").magnitude)
+      scale: $(${/pulses/1/scale})
+
+
+retina-therm:
+  thermal:
+    k: $(${/thermal/k})
+    c: $(${/thermal/c})
+    rho: $(${/thermal/rho})
+  layers:
+    - mua: $(${/layers/0/mua})
+      d: $(${/layers/0/d})
+      z0: $(${/layers/0/z0})
+    - mua: $(${/layers/1/mua})
+      d: $(${/layers/1/d})
+      z0: $(${/layers/1/z0})
+  simulation:
+    cw_output_file: output/retina-therm/Tvst-CW.txt
+    cw_output_config_file: $(${cw_output_file}.replace("Tvst","CONFIG"))
+    mp_input_file: output/retina-therm/Tvst-CW.txt
+    mp_output_file: output/retina-therm/Tvst-MP.txt
+    mp_output_config_file: $(${mp_output_file}.replace("Tvst","CONFIG"))
+    sensor:
+      z: $(${/simulation/sensor/z})
+      r: $(${/simulation/sensor/r})
+    time:
+      dt: $(${/simulation/time/dt})
+      max: $(${/simulation/time/tmax})
+  laser:
+    E0: $(${/laser/E0})
+    R: $(${/laser/R})
+  tau: $(${/pulses/0/duration})
+  contributions:
+    - arrival_time: $(${/pulses/0/arrival_time})
+      scale: $(${/pulses/0/scale})
+    - arrival_time: $(${/pulses/1/arrival_time})
+      scale: $(${/pulses/1/scale})

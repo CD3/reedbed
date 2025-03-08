@@ -1,27 +1,46 @@
+# "global" configuration keys used to configure all other model configs
 laser:
-  R : 100 um
+  R :
+    '@batch':
+      - 10 um
+      - 100 um
+      - 1000 um
+
   E0: 1 W/cm^2
 layers:
 - d: 10 um
   mua: 300 1/cm
   z0: 0 um
 - d: 100 um
-  mua: 50 1/cm
-  z0: 10 um
+  mua:
+    '@batch':
+      - 10 1/cm
+      - 1000 1/cm
+  z0:
+    '@batch':
+      - 10 um
+      - 1000 um
+
 simulation:
   sensor:
     r: 0 um
+      # '@batch':
+      #   - 0 um
+      #   - 10 um
+
     z: 0 um
   time:
     dt: 100 us
-    tmax: 1 s
+    tmax: 100 ms
+  output:
+    Tvst_filename: Tvst-R$(str(${/laser/R}).replace(" ","_"))-z0$(str(${/layers/1/z0}).replace(" ","_"))-mua$(str(${/layers/1/mua}).replace(" ","_").replace("/","_o_")).txt
 thermal:
   k: 0.006306 W/cm/K
   rho: 1 g / cm^3
   c: 4.178 J /g/ K
 
 
-reedbed:
+reedbed: # these keys are used in CONFIG-reedbed.json.template
   thermal:
     k: $(${/thermal/k}.to("W / cm / K").magnitude)
     c: $(${/thermal/c}.to("J / g / K").magnitude)
@@ -47,7 +66,7 @@ reedbed:
 
 
 
-retina-therm:
+retina-therm: # these keys are used in CONFIG-retina-therm.yml.template
   thermal:
     k: $(${/thermal/k})
     c: $(${/thermal/c})
@@ -60,6 +79,8 @@ retina-therm:
       d: $(${/layers/1/d})
       z0: $(${/layers/1/z0})
   simulation:
+    output_file: output/retina-therm/$(${/simulation/output/Tvst_filename})
+    output_config_file: output/retina-therm/$(${/simulation/output/Tvst_filename}.replace("Tvst","CONFIG"))
     sensor:
       z: $(${/simulation/sensor/z})
       r: $(${/simulation/sensor/r})
@@ -69,3 +90,65 @@ retina-therm:
   laser:
     E0: $(${/laser/E0})
     R: $(${/laser/R})
+
+
+
+
+pac1d:
+  layers:
+    - absorption_coefficient: 0 1/cm
+      thickness: 0.3 cm
+      conductivity: $(${/thermal/k})
+      specific_heat: $(${/thermal/c})
+      density: $(${/thermal/rho})
+    - absorption_coefficient: $(${/layers/0/mua})
+      thickness: $(${/layers/0/d})
+      conductivity: $(${/thermal/k})
+      specific_heat: $(${/thermal/c})
+      density: $(${/thermal/rho})
+    - absorption_coefficient: $(${/layers/1/mua})
+      thickness: $(${/layers/1/d})
+      conductivity: $(${/thermal/k})
+      specific_heat: $(${/thermal/c})
+      density: $(${/thermal/rho})
+    - absorption_coefficient: 0 1/cm
+      thickness: 0.3 cm
+      conductivity: $(${/thermal/k})
+      specific_heat: $(${/thermal/c})
+      density: $(${/thermal/rho})
+  simulation:
+    time:
+      dt: $(${/simulation/time/dt})
+      max: $(${/simulation/time/tmax})
+    grid:
+      res: 1 um
+      max: $( ${../../layers/0/thickness} + ${../../layers/1/thickness} )
+      n: $( int(${max}/${res}) )
+  laser:
+    duration: 1 year
+    irradiance: $(${/laser/E0})
+  sensors:
+    - z: $(${/simulation/sensor/z} + ${../../layers/0/thickness})
+      filename: output/pac1d/$(${/simulation/output/Tvst_filename})
+    - filename: output/pac1d/$(${/simulation/output/Tvst_filename}.replace("Tvst","Tvsz")
+
+powerconf-run:
+  reedbed:
+    template_config_file: CONFIG-reedbed.json.template
+    rendered_config_file: config_files/reedbed/CONFIG-reedbed-$(str(${/laser/R}).replace(" ","_"))-$(str(${/simulation/sensor/r}).replace(" ","_")).json
+    output_file: output/reedbed/$(${/simulation/output/Tvst_filename})
+    command:
+      - mkdir -p output/reedbed
+      - cargo run --release -- temperature-rise -f json -t json $(${../rendered_config_file}) > $(${../output_file})
+  retina-therm:
+    template_config_file: CONFIG-retina-therm.yml.template
+    rendered_config_file: config_files/retina-therm/CONFIG-retina-therm-$(str(${/laser/R}).replace(" ","_"))-$(str(${/simulation/sensor/r}).replace(" ","_")).yml
+    command:
+      - mkdir -p output/retina-therm
+      - retina-therm temperature-rise $(${../rendered_config_file})
+  pac1d-cli:
+    template_config_file: CONFIG-pac1d.yml.template
+    rendered_config_file: config_files/pac1d/CONFIG-pac1d-$(str(${/laser/R}).replace(" ","_"))-$(str(${/simulation/sensor/r}).replace(" ","_")).yml
+    command:
+      - mkdir -p output/pac1d
+      - pac1d-cli run $(${../rendered_config_file})

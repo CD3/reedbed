@@ -1,3 +1,6 @@
 debug/
 target/
 **/*.rs.bk
+test/retina-therm-compare/__pycache__
+test/retina-therm-compare/config_files
+test/retina-therm-compare-multiple-pulse/.run-if.json

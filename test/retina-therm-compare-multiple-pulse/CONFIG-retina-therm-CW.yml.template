@@ -12,6 +12,7 @@ layers:
 laser:
   E0: {{retina-therm/laser/E0}}
   R: {{retina-therm/laser/R}}
+  profile: flattop
 
 simulation:
   sensor:
@@ -20,5 +21,5 @@ simulation:
   time:
     max: {{retina-therm/simulation/time/max}}
     dt: {{retina-therm/simulation/time/dt}}
-  output_file : output/retina-therm/Tvst.txt
-  config_output_file : output/retina-therm/CONFIG.yml
+  output_file : {{retina-therm/simulation/cw_output_file}}
+  output_config_file : {{retina-therm/simulation/cw_output_config_file}}
