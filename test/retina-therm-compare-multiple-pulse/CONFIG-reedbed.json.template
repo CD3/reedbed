@@ -40,6 +40,11 @@
       "arrival_time": {{reedbed/pulses/0/arrival_time}},
       "duration": {{reedbed/pulses/0/duration}},
       "scale": {{reedbed/pulses/0/scale}}
+    },
+    {
+      "arrival_time": {{reedbed/pulses/1/arrival_time}},
+      "duration": {{reedbed/pulses/1/duration}},
+      "scale": {{reedbed/pulses/1/scale}}
     }
   ]
 }

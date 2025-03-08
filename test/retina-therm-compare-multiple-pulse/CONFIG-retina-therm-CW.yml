@@ -1,0 +1,25 @@
+thermal:
+    k: 0.006306 watt / centimeter / kelvin
+    rho: 1.0 gram / centimeter ** 3
+    c: 4.178 joule / gram / kelvin
+layers:
+  - mua: 300.0 / centimeter
+    d: 10 micrometer
+    z0: 0 micrometer
+  - mua: 50.0 / centimeter
+    d: 100 micrometer
+    z0: 10 micrometer
+laser:
+  E0: 1.0 watt / centimeter ** 2
+  R: 100 micrometer
+  profile: flattop
+
+simulation:
+  sensor:
+    z: 0 micrometer
+    r: 0 micrometer
+  time:
+    max: 100 millisecond
+    dt: 100 microsecond
+  output_file : output/retina-therm/Tvst-CW.txt
+  output_config_file : output/retina-therm/CONFIG-CW.txt
