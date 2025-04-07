@@ -179,8 +179,8 @@ fn main() -> anyhow::Result<()> {
                 let configuration = configuration.context(
                     "Unable to deserialize an input configuration",
                 )?;
-                let quadrature = quadrature::TanhSinh { iteration_limit: 6 };
-                let epsilon = 1e-10;
+                let quadrature = quadrature::TanhSinh { iteration_limit: 10 };
+                let epsilon = f64::EPSILON;
 
                 match configuration {
                     Operation::TemperatureRise(TemperatureRise {
