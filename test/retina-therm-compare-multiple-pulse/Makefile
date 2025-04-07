@@ -1,5 +1,6 @@
-SHELL := /bin/bash
+SHELL := /bin/zsh
 
+.PHONY: all
 all: plot
 
 .PHONY: configs
@@ -16,7 +17,7 @@ CONFIG-retina-therm-mp.yml: CONFIG.yml
 
 output/reedbed/Tvst.txt: CONFIG-reedbed.json
 	mkdir -p output/reedbed/
-	cat CONFIG-reedbed.json | time ./reedbed start -f json	-t json > output/reedbed/Tvst.txt 2> reedbed.stderr
+	cat CONFIG-reedbed.json | time cargo run --release -- start -f json -t json > output/reedbed/Tvst.txt 2> reedbed.stderr
 
 output/retina-therm/Tvst-CW.txt: CONFIG-retina-therm-cw.yml
 	mkdir -p output/retina-therm/
@@ -32,8 +33,7 @@ check:
 	@which gnuplot >/dev/null || echo "gnuplot not found. Please install."
 
 .PHONY: run
-run: output/reedbed/Tvst.txt output/retina-therm/MP/Tvst.txt
-
+run: output/reedbed/Tvst.txt output/retina-therm/Tvst-MP.txt
 
 .PHONY: clean
 clean:
