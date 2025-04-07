@@ -2,18 +2,28 @@ SHELL := /bin/bash
 
 all: plot
 
-output/reedbed/Tvst.txt:
+.PHONY: configs
+configs: CONFIG-reedbed.json CONFIG-retina-therm-cw.yml CONFIG-retina-therm-mp.yml
+
+CONFIG-reedbed.json: CONFIG.yml
+	powerconf generate CONFIG.yml -n reedbed -f json CONFIG-reedbed.json
+
+CONFIG-retina-therm-cw.yml: CONFIG.yml
+	powerconf generate CONFIG.yml -n retina-therm-cw -f yml CONFIG-retina-therm-cw.yml
+
+CONFIG-retina-therm-mp.yml: CONFIG.yml
+	powerconf generate CONFIG.yml -n retina-therm-mp -f yml CONFIG-retina-therm-mp.yml
+
+output/reedbed/Tvst.txt: CONFIG-reedbed.json
 	mkdir -p output/reedbed/
-	powerconf render CONFIG.yml CONFIG-reedbed.json.template /dev/stdout | time cargo run --release -- start -f json	-t json > output/reedbed/Tvst.txt 2> reedbed.stderr
+	cat CONFIG-reedbed.json | time ./reedbed start -f json	-t json > output/reedbed/Tvst.txt 2> reedbed.stderr
 
-output/retina-therm/Tvst-CW.txt: CONFIG.yml CONFIG-retina-therm-CW.yml.template
+output/retina-therm/Tvst-CW.txt: CONFIG-retina-therm-cw.yml
 	mkdir -p output/retina-therm/
-	powerconf render CONFIG.yml CONFIG-retina-therm-CW.yml.template CONFIG-retina-therm-CW.yml
-	retina-therm temperature-rise CONFIG-retina-therm-CW.yml
+	retina-therm temperature-rise CONFIG-retina-therm-cw.yml
 
-output/retina-therm/Tvst-MP.txt: output/retina-therm/Tvst-CW.txt CONFIG-retina-therm-MP.yml.template
-	powerconf render CONFIG.yml CONFIG-retina-therm-MP.yml.template CONFIG-retina-therm-MP.yml
-	retina-therm multiple-pulse CONFIG-retina-therm-MP.yml
+output/retina-therm/Tvst-MP.txt: output/retina-therm/Tvst-CW.txt CONFIG-retina-therm-mp.yml
+	retina-therm multiple-pulse CONFIG-retina-therm-mp.yml
 
 .PHONY: check
 check:
@@ -22,13 +32,13 @@ check:
 	@which gnuplot >/dev/null || echo "gnuplot not found. Please install."
 
 .PHONY: run
-run: output/reedbed/Tvst.txt output/retina-therm/Tvst-MP.txt
+run: output/reedbed/Tvst.txt output/retina-therm/MP/Tvst.txt
 
 
 .PHONY: clean
 clean:
-	rm -rf output *.stderr
+	rm -rf output *.stderr CONFIG-*
 
 .PHONY: plot
 plot: run
-	cd output && gnuplot --persist -e 'plot "reedbed/Tvst.txt", "retina-therm/Tvst-MP.txt" using 1:2 with line title "rise"'
+	cd output && gnuplot --persist -e 'plot "reedbed/Tvst.txt" title "reedbed", "retina-therm/MP/Tvst.txt" using 1:2 with line title "retina-therm"'
